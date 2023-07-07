@@ -1,1 +1,87 @@
-\chapter{语义检查}
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{enumerate}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage[export]{adjustbox}
+\usepackage[UTF8]{ctex}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{verbatim}
+
+
+\title{语义检查(Semantic)}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\noindent
+(先随便写写) \\
+(中英混杂有点别扭？？)\\
+1. 基本信息：编译器作业整体分为semantic、codegen、optimizer三个部分，不限语言，推荐用Java完成。\\
+2. 强烈建议认真阅读Yx的代码和tutorial.md。 \\
+Yx是一个比Mx更加简单的语法，阅读Yx的实现对于代码的完成非常有帮助。\\
+Yx的github地址：https://github.com/ZYHowell/Yx \\
+3. 参考用书：(已下发) \\
+4. 一些建议：多和同学、助教交流；没有头绪时多看看Yx和学长学姐的代码，有助于理解并提高效率；
+切忌抄袭。\\
+
+
+\section{Semantic}
+\subsection{Introduction}
+\noindent
+在一个编译器的结构中，semantic阶段主要完成了词法分析(lexer)、语法分析(parser)、语义分析(semantic)的部分。
+这一部分的评测要求是，正确地判断一段Mx代码是否存在词法、语法、语义上的错误。\\
+lexer和parser的部分，我们将使用antlr4帮助我们完成；然后，我们将利用antlr4为我们生成的代码，构建AST(以下会有详解)，并
+进行semantic check。\\
+接下来，我们将首先讲解对于semantic阶段工作的整体理解，再对具体的实现步骤逐步解析。
+
+\subsection{Overview}
+semantic部分的难点，主要在于如何构建AST。AST即abstract syntax tree，指抽象语法树。通俗地说，我们将源代转换成用树的结构来表示，
+这棵树叫做AST。antlr4能够为我们完成lexer和parser，并提供接口便于我们提取其中的信息，我们希望能够自定义树的每个结点，并储存我们所需要的
+信息，所以我们将继承antlr4生成的类，然后构建一棵属于我们的AST。\\
+
+在一切工作开始之前，我们先根据Mx语言的规定，high level地了解一下我们的AST。 \\
+
+一份Mx代码将被转换成一棵AST，这棵树从RootNode开始，随着树的层数的加深，
+每层的结点所表示的单位逐渐变小。下面是基于Mx的一个AST层级的简单示意：
+\begin{verbatim}
+RootNode 
+- VariableDef
+- ClassDefination
+    - VariableDefination
+    - FuncDefination
+- FunctionDefination - Statements - Expressions 
+\end{verbatim}
+
+Mx语言下，对这个结构进行一点简单的注解：\\
+1. RootNode从全局作用域开始。Mx的全局作用域中只存在全局变量、类定义、全局函数三种类型。\\
+2. 类定义中，只存在变量和函数。 \\
+3. 一个函数包含多个statement(语句)。在AST中，一个函数中的每个statement都是这个函数节点的子节点。
+statement有许多种类型，比如if语句、循环语句(for、while)等等。\\
+4. expression(表达式)有许多种类型，比如基本表达式(primary)、常量表达式(constant)、赋值表达式(assignment)等等。 \\
+5. 关于Mx所使用的statement和expression，Mx文档中均有明确的规定，概念模糊的同学可以先仔细阅读。 \\
+
+如果你对以上结构感到费解，可以仔细阅读Yx库中的g4文件(Yx/src/parser/Yx.g4)辅助理解，或者继续阅读下一部分中对于如何构建AST的详细介绍，
+准确地理解AST的结构将会大大提高效率。\\
+
+\subsection{Practical Methods}
+
+\subsubsection{Write the Grammar}
+
+\subsubsection{The Parse Part in compiler}
+
+\subsubsection{Design and Build the AST}
+
+\subsubsection{Semantic Check}
+
+
+
+\end{document}
