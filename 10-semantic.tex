@@ -1,7 +1,7 @@
 \chapter{语义检查(Semantic)}
 \noindent
 (先写一点备注) \\
-1. 强烈建议认真阅读Yx的代码和tutorial.md。 \\
+1. 强烈建议认真阅读Yx的代码和Tutorial.md。 \\
 Yx是一个比Mx更加简单的语法，阅读Yx的实现对于代码的完成非常有帮助。\\
 Yx的github地址：https://github.com/ZYHowell/Yx \\
 2. 一些建议：多和同学、助教交流；没有头绪时多看看Yx和学长学姐的代码，有助于理解并提高效率；
@@ -10,6 +10,7 @@ Yx的github地址：https://github.com/ZYHowell/Yx \\
 \section{Introduction}
 在一个编译器的结构中，semantic阶段主要完成了词法分析(lexer)、语法分析(parser)、语义分析(semantic)的部分。
 这一部分的评测要求是，正确地判断一段Mx代码是否存在词法、语法、语义上的错误。\\
+
 lexer和parser的部分，我们将使用antlr4帮助我们完成；然后，我们将利用antlr4为我们生成的代码，构建AST(以下会有详解)，并
 进行semantic check。
 接下来，我们将首先讲解对于semantic阶段工作的整体理解，再对具体的实现步骤逐步解析。
@@ -44,14 +45,67 @@ statement有许多种类型，比如if语句、循环语句(for、while)等等�
 准确地理解AST的结构将会大大提高效率。\\
 
 \section{Practical Methods}
+以下是semantic部分的具体实现过程。
+
+\subsection{About antlr4}
+antlr4是一个强大的解析器生成器。在我们的实现中，我们需要先写一个Mx.g4文件，用来描述Mx的语法，然后运行ANTLR命令，
+生成MxLexer.java, MxParser.java等文件。\\
+
+antlr4的安装、运行等等内容，请阅读《antlr4权威指南》第一部分的相应内容(pdf已下发，17页开始)。\\
+
+antlr4的其他详细内容，请参照《antlr4权威指南》。
 
 \subsection{Write the Grammar}
+关于g4文件如何书写，《antlr4权威指南》中已经给出了详细的指导，可以结合Yx的代码理解。\\
+
+下面简单介绍一下g4文件各部分内容的意义：\\
+1. \\
+
+提醒： \\
+1. 关于优先级问题 \\
+2. 使用 "\#"  \\
+3. 使用 "<assoc=right>"
+
 
 \subsection{The Parse Part in compiler}
+1. 生成文件解释 \\
+对完成的g4文件，运行antlr4后，将生成一系列文件，下面对几个文件进行一个简单地介绍。 \\
+
+
+2. 调用生成代码完成lexer和parser \\
+如何在我们的代码中调用antlr4生成的文件来完成lexer和paerser？Yx的main文件已经给出了示例。
+下面的代码是Yx的部分代码：\\
+\begin{verbatim}
+    YxLexer lexer = new YxLexer(CharStreams.fromStream(input));     // 1
+    lexer.removeErrorListeners();                                   // 2
+    lexer.addErrorListener(new YxErrorListener());                  // 3    
+    YxParser parser = new YxParser(new CommonTokenStream(lexer));   // 4
+    parser.removeErrorListeners();                                  // 5
+    parser.addErrorListener(new YxErrorListener());                 // 6
+    ParseTree parseTreeRoot = parser.program();                     // 7
+\end{verbatim}
+注解： \\
+
+
+3. 自定义error \\
+antlr4在lexer和parser的过程中，能够发现词法、语法错误，而具体的报错函数可以自定义。
+这里可以参考Yx对于YxErrorListener类的处理。
 
 \subsection{Design and Build the AST}
+\subsubsection{About the Tree}
+
+\subsubsection{ASTNode}
+
+\subsubsection{Scope}
+
+\subsubsection{ASTBuilder}
+
 
 \subsection{Semantic Check}
+1. SymbolCollector \\
+
+2. SemanticChecker \\
+
 
 
 
