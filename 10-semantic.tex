@@ -1,3 +1,5 @@
+
+
 \chapter{语义检查(Semantic)}
 \noindent
 (先写一点备注) \\
@@ -24,14 +26,14 @@ semantic部分的难点，主要在于如何构建AST。AST即abstract syntax tr
 
 一份Mx代码将被转换成一棵AST，这棵树从RootNode开始，随着树的层数的加深，
 每层的结点所表示的单位逐渐变小。下面是基于Mx的一个AST层级的简单示意：
-\begin{verbatim}
+\begin{lstlisting}
 RootNode 
 - VariableDef
 - ClassDefinition
     - VariableDefinition
     - FuncDefinition
 - FunctionDefinition - Statements - Expressions 
-\end{verbatim}
+\end{lstlisting}
 
 Mx语言下，对这个结构进行一点简单的注解：\\
 1. RootNode从全局作用域开始。Mx的全局作用域中只存在全局变量、类定义、全局函数三种类型。\\
@@ -58,24 +60,152 @@ antlr4的其他详细内容，请参照《antlr4权威指南》。
 \subsection{Write the Grammar}
 关于g4文件如何书写，《antlr4权威指南》中已经给出了详细的指导，可以结合Yx的代码理解。\\
 
-下面简单介绍一下g4文件各部分内容的意义：\\
-1. \\
+下面结合Yx.g4，简单介绍一下g4文件各部分内容的意义(完整代码请移步Yx)：\\
 
-提醒： \\
-1. 关于优先级问题 \\
-2. 使用 "\#"  \\
-3. 使用 "<assoc=right>" \\
+1. Lexer 词法分析。\\
+Yx的Lexer部分如下：
+\begin{lstlisting}
+    Int : 'int';
+    If : 'if';
+    Else : 'else';
+    Return : 'return';
+    
+    LeftParen : '(';
+    RightParen : ')';
+    LeftBracket : '[';
+    RightBracket : ']';
+    LeftBrace : '{';
+    RightBrace : '}';
+    
+    Less : '<';
+    LessEqual : '<=';
+    Greater : '>';
+    GreaterEqual : '>=';
+    LeftShift : '<<';
+    RightShift : '>>';
+    
+    Plus : '+';
+    Minus : '-';
+    
+    And : '&';
+    Or : '|';
+    AndAnd : '&&';
+    OrOr : '||';
+    Caret : '^';
+    Not : '!';
+    Tilde : '~';
+    
+    Question : '?';
+    Colon : ':';
+    Semi : ';';
+    Comma : ',';
+    
+    Assign : '=';
+    Equal : '==';
+    NotEqual : '!=';
+    
+    Identifier
+        : [a-zA-Z] [a-zA-Z_0-9]*
+        ;
+    
+    DecimalInteger
+        : [1-9] [0-9]*
+        | '0'
+        ;
+    
+    Whitespace
+        :   [ \t]+
+            -> skip
+        ;
+    
+    Newline
+        :   (   '\r' '\n'?
+            |   '\n'
+            )
+            -> skip
+        ;
+    
+    BlockComment
+        :   '/*' .*? '*/'
+            -> skip
+        ;
+    
+    LineComment
+        :   '//' ~[\r\n]*
+            -> skip
+        ;
+\end{lstlisting}
+值得一提，lexer部分的书写顺序是不可以任意调换的，因为词法分析器会按照g4给出的顺序去识别每个单词。
+比如，在Yx.g4的lexer部分中，仅考虑词法的定义，
+`int'既可以是`Int'，也可以是`Identifier'，但我们只希望它被识别为`Int'，所以我们将`Int'写在前面。\\
+
+2. Parser 语法分析。\\
+注意，书写这部分之前，需要充分理解semantic overview部分提到的AST结构，
+以减少后续写代码时回头重新修改g4文件的次数。
+Yx的Parser部分如下：
+\begin{lstlisting}
+program: 'int main()' suite EOF;
+
+varDef : Int Identifier ('=' expression)? ';';
+
+suite : '{' statement* '}';
+
+statement
+    : suite                                                 #block
+    | varDef                                                #vardefStmt
+    | If '(' expression ')' trueStmt=statement 
+        (Else falseStmt=statement)?                         #ifStmt
+    | Return expression? ';'                                #returnStmt
+    | expression ';'                                        #pureExprStmt
+    | ';'                                                   #emptyStmt
+    ;
+
+expression
+    : primary                                               #atomExpr
+    | expression op=('+' | '-') expression                  #binaryExpr
+    | expression op=('==' | '!=' ) expression               #binaryExpr
+    | <assoc=right> expression '=' expression               #assignExpr
+    ;
+
+primary
+    : '(' expression ')'
+    | Identifier 
+    | literal 
+    ;
+
+literal
+    : DecimalInteger
+    ;
+\end{lstlisting}
+值得一提，代码中第一行的program表示的是一份Yx代码在全局作用域体现的结构，也是AST的根节点
+中会存储的内容。Yx语言中，全局作用域内只有main函数，所以Yx.g4的program比较简单。\\
+
+Tips: \\
+1. 对于Mx，如果觉得Lexer和Parser置于同一文件中过于复杂，可以考虑分为两个文件(MxLexer.g4, MxParser.g4)来书写。
+整合方法可自行查阅。\\
+2. 如果你使用IDEA，可以基于你写的g4文件，输入一段Mx代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{image/g4.png}
+    \caption{样例}
+\end{figure}
 
 
 \subsection{The Parse Part in compiler}
 1. 生成文件解释 \\
-对完成的g4文件，运行antlr4后，将生成一系列文件，下面对几个文件进行一个简单地介绍。 \\
-
+对完成的g4文件，运行antlr4后，将生成一系列文件。下面以Yx为例对部分生成文件进行一个简单地介绍。
+(建议阅读《antlr4权威指南》59页起，对生成文件的描述更加详细。) \\
+ - Yx.tokens ANTLR会给我们定义的词法符号指定一个数字形式的类型，然后将他们的对应关系存储到该文件当中。\\
+ - YxLexer.java 词法解析类 \\
+ - YxParser.java 语法解析类 \\
+ - YxListener.java, YxBaseListener.java 监听器 \\
+ - YxVisitor.java, YxBaseVisor.java 访问器 \\
+监听器和访问器是antlr4提供的两种遍历方法。两者的具体意义《antlr4权威指南》(49页起)有详细说明。\\
 
 2. 调用生成代码完成lexer和parser \\
 如何在我们的代码中调用antlr4生成的文件来完成lexer和paerser？Yx的main文件已经给出了示例。
 下面的代码是Yx的部分代码：\\
-\begin{verbatim}
+\begin{lstlisting}
     YxLexer lexer = new YxLexer(CharStreams.fromStream(input));     // 1
     lexer.removeErrorListeners();                                   // 2
     lexer.addErrorListener(new YxErrorListener());                  // 3    
@@ -83,19 +213,65 @@ antlr4的其他详细内容，请参照《antlr4权威指南》。
     parser.removeErrorListeners();                                  // 5
     parser.addErrorListener(new YxErrorListener());                 // 6
     ParseTree parseTreeRoot = parser.program();                     // 7
-\end{verbatim}
-注解： \\
-
+\end{lstlisting}
 
 3. 自定义error \\
-antlr4在lexer和parser的过程中，能够发现词法、语法错误，而具体的报错函数可以自定义。
+antlr4在lexer和parser的过程中，能够发现词法、语法错误，而具体的异常类可以自定义。
 这里可以参考Yx对于YxErrorListener类的处理。
 
 \subsection{Design and Build the AST}
-\subsubsection{About the Tree}
-从AST的具体实现方式来说，
+这部分的代码相当琐碎，且涉及到你对AST结构的理解，可以结合Yx代码仔细研究。
 
 \subsubsection{ASTNode}
+现在，我们需要建一棵AST。那么首先，我们需要为每一个节点定义一个类，来保存各自需要的信息，
+从而构成一棵树。这里的树形结构和g4的语法结构本质上是一致的。\\
+以下是Yx给出的ifStmtNode类的定义作为例子：
+\begin{lstlisting}
+    package AST;
+
+    import Util.position;
+    
+    public class ifStmtNode extends StmtNode {
+        ExprNode condition;
+        StmtNode thenStmt, elseStmt;
+    
+        public ifStmtNode(ExprNode condition, StmtNode thenStmt, StmtNode elseStmt, position pos) {
+            super(pos);
+            this.condition = condition;
+            this.thenStmt = thenStmt;
+            this.elseStmt = elseStmt;
+        }
+    
+        @Override
+        public void accept(ASTVisitor visitor) {
+            visitor.visit(this);
+        }
+    }
+\end{lstlisting}
+
+
+\subsubsection{ASTBuilder}
+在上述的Parse Part结束后，antlr4生成的代码为我们构建了一棵parse tree(即parseTreeRoot)。
+你可以认为，parse tree已经具有一个理想的树的结构，但是它保存的信息不足以满足我们的需求，
+故我们仍然需要建立一个AST，读取parse tree并增添我们需要的内容。\\
+
+antlr4生成的文件中，MxBaseVisitor提供了可以显式访问parse tree子结点的接口，所以
+ASTBuilder类将继承MxBaseVisitor类，然后访问parse tree的各个节点，将
+需要的信息依次读入自定义的各种ASTNode类中，构建自己的AST树。\\
+
+关于MxBaseVisitor提供的接口如何使用，可以参考Yx代码。 \\
+
+以下是Yx给出的一个例子：
+\begin{lstlisting}
+@Override public ASTNode visitVarDef(YxParser.VarDefContext ctx) {
+    String name = ctx.Identifier().toString();
+    ExprNode expr = null;
+    if (ctx.expression() != null) expr = (ExprNode)visit(ctx.expression());
+
+    return new varDefStmtNode(name, expr, new position(ctx));
+}
+\end{lstlisting}
+
 
 \subsubsection{Scope}
 Scope表示作用域。一般而言，由 \{ 和 \} 组成的块会引进一个新的作用域，当然，在Mx文档中关于作用域有更加详细准确的描述。\\
@@ -106,30 +282,49 @@ Scope表示作用域。一般而言，由 \{ 和 \} 组成的块会引进一个�
 
 在Yx的示例代码中，关于Scope采用了一个类似树的结构来维护，根据作用域的关系建树。
 具体的实现思路是：定义一个Scope类，用以储存每个作用域内需要的信息。
-以globalScope(全局作用域)作为根节点。维护一个currentScope表示当前作用域，如果产生了一个新的作用域（比如
-在IfStmtNode中，一个if-else语句会产生两个内层的作用域），则新建一个Scope作为新的currentScope，完成
+以全局作用域作为根节点。维护一个currentScope表示当前作用域，如果产生了一个新的作用域（比如
+在IfStmtNode中，一个if-else语句会产生两个内层的作用域），则新建一个Scope类变量作为新的currentScope，完成
 该内层作用域内的工作后，再将currentScope退回先前的作用域，通过成员变量parentScope记录作用域之间的关系并实现回溯。
 这样，每当我们需要为一个被调用的变量寻找它的定义，我们可以通过parentScope从当前作用域不断向前回溯，直到找到
 这个变量对应的定义。\\
 
 需要强调，Mx语言中内层作用域可以遮蔽外层作用域的名字，这也是我们采用上述方法来实现Scope的一个重要原因。\\
 
-如果感到困惑，请结合Yx的代码对这一部分进行理解。
+Yx关于Scope类的定义在 Yx/src/Util/ 中，如果对以上的描述感到困惑，可以结合Yx的代码对这一部分进行理解。
 
-\subsubsection{ASTBuilder}
-
-
-\subsection{Semantic Check}
+\subsection{Semantic}
 进行到这一步，我们已经建好了AST，接下来我们将进行语义检查。\\
 
 \subsubsection{SymbolCollector}
-SymbolCollector是一个全局作用域内的收集，它存在的意义是，Mx会在全局定义类，自定义类也会出现在各个函数和变量定义中(包括出现在其他的类定义中)，作为变量类型或者函数的返回类型，所以
-在遍历AST进行语义检查之前，我们希望能够先收集并保存所有的自定义类。当然，收集过程中也需要做一些语义检查，比如重名、出现不存在的类型等。 \\
+首先，我们提出 type system 这一概念。在Mx语言中，允许出现的类型除了Mx文档提到的int,bool等基础类型外，还会
+出现Mx代码中自定义的类。所以我们需要建立一个 type system来管理各种类型。\\
 
-之所以将这部分从SemanticChecker独立出来，是因为 收集自定义类 这个步骤，需要在 遍历所有节点并进行语义检查 之前进行。
-事实上，这部分的设计非常自由，你可以进行更多你认为合理的操作。
+对于type system这一概念的实现，Yx的方法是，写一个Type类用来表示类型，然后维护一个globalScope类(一个继承Scope的类
+，表示全局作用域)变量，
+在SymbolCollector类中，将Mx的基本类型和代码中的自定义类型用Type表示，并保存在globalScope类变量中。 \\
+
+SymbolCollector类是一个全局作用域内的收集，它存在的意义是，Mx会在全局自定义类，自定义类也会出现在各个函数和变量定义中，包括出现在其他的类定义中，作为变量类型或者函数的返回类型，所以
+在遍历AST进行语义检查之前，我们需要先收集并保存所有的自定义类。当然，收集过程中也需要做一些语义检查，比如重名、出现不存在的类型等。 \\
+
+值得一提，之所以将这部分从SemanticChecker独立出来，是因为 收集自定义类 这个步骤，需要在 遍历所有节点并进行语义检查 之前进行，
+是管理type system的一个类。事实上，这部分的设计非常自由，你可以进行更多你认为合理的操作。\\
+
+如果你对以上内容感到费解，可以阅读Yx的Tutorial.md中的讲解和Yx代码，辅助理解。
 
 \subsubsection{SemanticChecker}
+现在，AST的信息和type system，我们开始进行语义检查。 \\
+
+我们在ExprNode(表达式节点)中加入了一些成员变量，帮助我们处理一些语义错误，比如： \\
+
+1. 用`type'表示每个`ExprNode'的类型，用来处理类型匹配问题。\\
+例如：表达式`a==b' (`a'与`b'都是int型)的类型是bool型的，
+所以它的`type'应为bool型。\\
+
+2. 用`isAssignable'表示每个`ExprNode'是否能够被赋值，用来处理右值问题。\\
+例如：表达式`++a'可以作为左值，是可以被赋值的；而表达式`a++'只能作为右值，`a++ = 1'这样的表达式是非法的。\\
+
+Mx涉及的语义错误在Mx文档中有详细的描述，这部分的代码相当琐碎，书写和debug过程中请保持耐心和细心。
+具体代码可以参考Yx。
 
 
 
