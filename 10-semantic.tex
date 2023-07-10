@@ -64,7 +64,7 @@ antlr4的其他详细内容，请参照《antlr4权威指南》。
 提醒： \\
 1. 关于优先级问题 \\
 2. 使用 "\#"  \\
-3. 使用 "<assoc=right>"
+3. 使用 "<assoc=right>" \\
 
 
 \subsection{The Parse Part in compiler}
@@ -93,18 +93,44 @@ antlr4在lexer和parser的过程中，能够发现词法、语法错误，而具
 
 \subsection{Design and Build the AST}
 \subsubsection{About the Tree}
+从AST的具体实现方式来说，
 
 \subsubsection{ASTNode}
 
 \subsubsection{Scope}
+Scope表示作用域。一般而言，由 \{ 和 \} 组成的块会引进一个新的作用域，当然，在Mx文档中关于作用域有更加详细准确的描述。\\
+
+对于我们semantic阶段的实现来说，处理Scope的意义是，我们需要保存每个作用域内定义的变量、函数等等信息，
+来确保每次在当前作用域或者更内层的作用域中调用某个变量或函数时，我们能够找到它们对应的定义，并判断是否存在语义错误
+(类型错误、重名等问题)。\\
+
+在Yx的示例代码中，关于Scope采用了一个类似树的结构来维护，根据作用域的关系建树。
+具体的实现思路是：定义一个Scope类，用以储存每个作用域内需要的信息。
+以globalScope(全局作用域)作为根节点。维护一个currentScope表示当前作用域，如果产生了一个新的作用域（比如
+在IfStmtNode中，一个if-else语句会产生两个内层的作用域），则新建一个Scope作为新的currentScope，完成
+该内层作用域内的工作后，再将currentScope退回先前的作用域，通过成员变量parentScope记录作用域之间的关系并实现回溯。
+这样，每当我们需要为一个被调用的变量寻找它的定义，我们可以通过parentScope从当前作用域不断向前回溯，直到找到
+这个变量对应的定义。\\
+
+需要强调，Mx语言中内层作用域可以遮蔽外层作用域的名字，这也是我们采用上述方法来实现Scope的一个重要原因。\\
+
+如果感到困惑，请结合Yx的代码对这一部分进行理解。
 
 \subsubsection{ASTBuilder}
 
 
 \subsection{Semantic Check}
-1. SymbolCollector \\
+进行到这一步，我们已经建好了AST，接下来我们将进行语义检查。\\
 
-2. SemanticChecker \\
+\subsubsection{SymbolCollector}
+SymbolCollector是一个全局作用域内的收集，它存在的意义是，Mx会在全局定义类，自定义类也会出现在各个函数和变量定义中(包括出现在其他的类定义中)，作为变量类型或者函数的返回类型，所以
+在遍历AST进行语义检查之前，我们希望能够先收集并保存所有的自定义类。当然，收集过程中也需要做一些语义检查，比如重名、出现不存在的类型等。 \\
+
+之所以将这部分从SemanticChecker独立出来，是因为 收集自定义类 这个步骤，需要在 遍历所有节点并进行语义检查 之前进行。
+事实上，这部分的设计非常自由，你可以进行更多你认为合理的操作。
+
+\subsubsection{SemanticChecker}
+
 
 
 
