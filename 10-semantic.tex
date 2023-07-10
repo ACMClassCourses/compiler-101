@@ -203,7 +203,7 @@ Tips: \\
 监听器和访问器是antlr4提供的两种遍历方法。两者的具体意义《antlr4权威指南》(49页起)有详细说明。\\
 
 2. 调用生成代码完成lexer和parser \\
-如何在我们的代码中调用antlr4生成的文件来完成lexer和paerser？Yx的main文件已经给出了示例。
+如何在我们的代码中调用antlr4生成的文件来完成lexer和paerser？Yx的main文件给出了示例。
 下面的代码是Yx的部分代码：\\
 \begin{lstlisting}
     YxLexer lexer = new YxLexer(CharStreams.fromStream(input));     // 1
@@ -251,7 +251,7 @@ antlr4在lexer和parser的过程中，能够发现词法、语法错误，而具
 
 
 \subsubsection{ASTBuilder}
-在上述的Parse Part结束后，antlr4生成的代码为我们构建了一棵parse tree(即parseTreeRoot)。
+在上述的Parse Part结束后，antlr4生成的代码为我们构建了一棵parse tree(即代码第7行的parseTreeRoot)。
 你可以认为，parse tree已经具有一个理想的树的结构，但是它保存的信息不足以满足我们的需求，
 故我们仍然需要建立一个AST，读取parse tree并增添我们需要的内容。\\
 
@@ -304,17 +304,15 @@ Yx关于Scope类的定义在 Yx/src/Util/ 中，如果对以上的描述感到�
 在SymbolCollector类中，将Mx的基本类型和代码中的自定义类型用Type表示，并保存在globalScope类变量中。 \\
 
 SymbolCollector类是一个全局作用域内的收集，它存在的意义是，Mx会在全局自定义类，自定义类也会出现在各个函数和变量定义中，包括出现在其他的类定义中，作为变量类型或者函数的返回类型，所以
-在遍历AST进行语义检查之前，我们需要先收集并保存所有的自定义类。当然，收集过程中也需要做一些语义检查，比如重名、出现不存在的类型等。 \\
-
-值得一提，之所以将这部分从SemanticChecker独立出来，是因为 收集自定义类 这个步骤，需要在 遍历所有节点并进行语义检查 之前进行，
-是管理type system的一个类。事实上，这部分的设计非常自由，你可以进行更多你认为合理的操作。\\
+在遍历AST进行语义检查之前，我们需要先收集并保存所有的自定义类。当然，收集过程中也需要做一些语义检查，比如重名等。 \\
 
 如果你对以上内容感到费解，可以阅读Yx的Tutorial.md中的讲解和Yx代码，辅助理解。
 
 \subsubsection{SemanticChecker}
-现在，AST的信息和type system，我们开始进行语义检查。 \\
+现在，有了AST的信息和type system，我们开始进行语义检查。在这一部分，
+我们需要遍历AST所有的节点，并对每个节点可能出现的错误进行判断。\\
 
-我们在ExprNode(表达式节点)中加入了一些成员变量，帮助我们处理一些语义错误，比如： \\
+注意，我们在ExprNode(表达式节点)中加入了一些成员变量，帮助我们处理一些语义错误，比如： \\
 
 1. 用`type'表示每个`ExprNode'的类型，用来处理类型匹配问题。\\
 例如：表达式`a==b' (`a'与`b'都是int型)的类型是bool型的，
