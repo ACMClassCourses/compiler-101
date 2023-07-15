@@ -22,6 +22,25 @@ LLVM 的完整文档，请访问 \url{https://llvm.org/docs/LangRef.html}。
 在学习 LLVM 的过程中，一个方便的使用环境非常重要。Godbolt (
 \url{https://godbolt.org/}) 提供了几乎所有的编译器，并且可以编译到大量平台。
 
+\begin{figure}[htb]
+\centering
+\includegraphics[scale=0.3]{image/godbolt.png}
+\caption{Godbolt 使用截图}
+\label{godbolt_sreenshot}
+\end{figure}
+
+图片 \ref{godbolt_sreenshot} 是一个通过在线 LLVM 环境来了解 LLVM 语言的例子。在
+gofbolt 上，页面被分为两栏——左栏是你的输入，右栏是你选择的编译器在你填入的参数下的输入。下面我们将会分别介绍左右栏的使用。
+
+左栏有一个语言选择框（位于左栏的上部）和一个代码输入框。语言选择框可以选择所使用的编程语言。
+
+右栏上部左边部分是编译器选择框，右边部分是编译器参数框。我们此时希望将代码编译到适用于 rv32gc
+平台的 LLVM 语言，而且不希望编译器做出优化（否则可能会把一部分代码直接去掉）。由于我们的编译器的目标平台是
+rv32gc，且 clang 可以通过 \texttt{-emit-llvm} 来输出 LLVM 语言，因此我们在编译器选择框选择
+RISCV rv32gc clang (trunk)（trunk 这里表示最新的 clang），在编译器参数框中输入 \texttt{-emit-llvm -O0}。
+
+关于语言特性的内容，请见章节 \ref{LLVM}。
+
 \subsubsection{本地 LLVM 环境}
 
 你可以安装 LLVM 15 及其以上版本。截止 LLVM 17，所有的 LLVM 15 特性均可使用。
@@ -30,7 +49,7 @@ LLVM 的完整文档，请访问 \url{https://llvm.org/docs/LangRef.html}。
 
 对于使用 pacman 包管理的用户，可以执行 \texttt{sudo pacman -S llvm} 安装最新版本的 LLVM。
 
-\subsection{LLVM 15 语法}
+\subsection{LLVM 15 语法}\label{LLVM}
 
 \section{从中间语言到目标代码}
 
