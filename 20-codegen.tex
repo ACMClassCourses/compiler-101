@@ -35,16 +35,15 @@ LLVM IR 语言与高级语言不同，不存在多层嵌套的环境，语句以
 的原因是从 LLVM 15 开始，LLVM IR 默认使用不透明指针
 (Opaque Pointers)，大大减少了转换时的负担。具体请参见章节 \ref{LLVM-semantic}。
 
+LLVM IR 的一大特性是静态单赋值 (Static Single Assignment,
+SSA)，即变量能且仅能被赋值一次，这一特性可以让编译器的静态分析更方便。
+
 当然，你也可以使用其他 IR 或是直接一步从 AST
 转换成目标代码（因为我们的编译器只有一个目标平台）。
 
-\section{从抽象语法树到中间语言}
+\section{LLVM 15 环境}
 
-在研究如何从抽象语法树转换到中间语言前，我们需要先了解一下 LLVM 15。
-
-\subsection{LLVM 15 环境}
-
-\subsubsection{在线 LLVM 环境}
+\subsection{在线 LLVM 环境}
 
 在学习 LLVM 的过程中，一个方便的使用环境非常重要。Godbolt (
 \url{https://godbolt.org/}) 提供了几乎所有的编译器，并且可以编译到大量平台。
@@ -68,7 +67,7 @@ RISCV rv32gc clang (trunk)（trunk 这里表示最新的 clang），在编译器
 
 关于语言特性的内容，请见章节 \ref{LLVM-semantic}。
 
-\subsubsection{本地 LLVM 环境}
+\subsection{本地 LLVM 环境}
 
 你可以安装 LLVM 15 及其以上版本。截止 LLVM 17，所有的 LLVM 15 特性均可使用。
 
@@ -79,12 +78,17 @@ RISCV rv32gc clang (trunk)（trunk 这里表示最新的 clang），在编译器
 你可以执行 \texttt{clang --version} 来检查 clang 是否确实安装到系统中。正常情况下，该指令会显示你的
 clang 版本、目标平台等信息。
 
-\subsection{LLVM 15 语法}\label{LLVM-semantic}
+\section{LLVM 15 语法}\label{LLVM-semantic}
 
 \textit{本章节只介绍常用的 LLVM 15 语法。如需了解全部语法或更详细的 LLVM 语法，请访问
 \url{https://llvm.org/docs/LangRef.html}。}
 
-\subsubsection{LLVM 15 简单例子}
+\textit{提示：你可以先大致了解 LLVM 15 语法，然后跳到「从抽象语法树到中间语言」章节
+(\ref{AST-to-IR}) 了解如何完成抽象语法树到 IR
+的转换。在阅读「从抽象语法树到中间语言」部分的过程中，如果对 LLVM IR
+的语法有疑惑，再回到本部分查看详细信息。}
+
+\subsection{LLVM 15 简单例子}
 
 对于下面的代码，
 
@@ -99,7 +103,7 @@ int foo(int* a, int b) {
 在 \texttt{-emit-llvm -O1} 参数下，会生成下面的代码（下面的代码去掉了生成代码的
 attribute 部分和一些注释，这些内容我们在编译器大作业中应该用不到）
 
-\begin{lstlisting}
+\begin{lstlisting}[language=llvm]
 @c = dso_local local_unnamed_addr global i32 0, align 4, !dbg !0
 
 define dso_local i32 @foo(ptr noundef readonly %0, i32 noundef %1) local_unnamed_addr #0 !dbg !15 {
@@ -125,10 +129,10 @@ define dso_local i32 @foo(ptr noundef readonly %0, i32 noundef %1) local_unnamed
 \texttt{dso\_local}   \texttt{local\_unnamed\_addr} 和
 \texttt{align}）以及不必要的 debug 函数，这样可以得到以下的代码
 
-\begin{lstlisting}
+\begin{lstlisting}[language=llvm]
 @c = global i32 0
 
-define dso_local i32 @foo(ptr %0, i32 %1) {
+define i32 @foo(ptr %0, i32 %1) {
   %3 = icmp eq ptr %0, null
   br i1 %3, label %9, label %4
 
@@ -151,7 +155,435 @@ define dso_local i32 @foo(ptr %0, i32 %1) {
 \textit{提示：如果你在选择的语言为 C++，那么你会发现函数名和原来的函数名不一样（一般会有一个下划线前缀和一个与函数参数相关的类型），这是由于
 C++ 的 name mangling 机制，具体请上网执行了解。Name mangling
  机制主要用于解决函数重载时命名冲突问题，通过改名的方式，让函数实际名称不会冲突。一个简单的解决方案是全部使用
- C 语言而不使用 C++，但是 C 语言没有类的成员函数，在处理成员函数时仍然要将语言调为 C++。}
+ C 语言而不使用 C++，但是 C 语言没有成员函数，在处理成员函数时仍然要将语言调为 C++。}
+
+\subsection{LLVM 15 基本语法}
+
+LLVM 15 的基本语法包含
+\begin{itemize}
+  \item 类型，如 \texttt{i1}，\texttt{i32}，具体参见章节 \ref{LLVM-types}；
+  \item 变量，如 \texttt{\@a = global i32 0} 以及
+    \texttt{\%a = ...}，具体参见章节 \ref{LLVM-variables}；
+  \item 常量，具体参见章节 \ref{LLVM-constants}；
+  \item 函数定义，如 \texttt{define i32 \@foo(ptr \%0, i32 \%1) \{...\}}，具体参见章节
+    \ref{LLVM-functions}；
+  \item 标签 (label)，如 \texttt{4:}；
+  \item 语句，如 \texttt{\%3 = icmp eq ptr \%0, null}，具体参见章节
+    \ref{LLVM-statements}。
+\end{itemize}
+
+一个基本的 LLVM IR 翻译单元由若干类型声明、若干全局变量和若干函数定义组成。
+
+函数定义由若干标签和若干语句组成。标签是可以被分支语句 (\ref{LLVM-br-statements})
+跳转到的地方。在函数外部的变量为全局变量，在函数内部的变量为局部变量。所有的变量能且仅能被赋值一次（因此全局变量实际上是指向变量的指针）。
+
+每行的分号 (\texttt{;}) 后的内容为注释。如没有注释，分号是不必要的。
+
+\subsection{类型}\label{LLVM-types}
+
+常用的类型有
+\begin{itemize}
+  \item 整数类型：用 \texttt{i<N>} 表示，如 \texttt{i32}，\texttt{i1}；
+  \item 指针类型：用 \texttt{ptr} 表示；
+  \item 数组类型：用 \texttt{[<\# elements> x <elementtype>]} 表示，如
+    \texttt{[40 x i32]}。数组类型允许嵌套定义，如
+    \texttt{[3 x [4 x i32]]}，表示 $3\times 4$ 的二维数组。另请参见
+    \url{https://llvm.org/docs/LangRef.html#array-type}；
+  \item 结构类型：对于普通的类，用 \texttt{\%<typename> = type \{ <type list> \}} 表示，如
+    \texttt{\%mytype = type \{ \%mytype*, i32 \}}；对于不能对齐的类
+    (packed struct)，用 \texttt{\%<typename> = type <\{ <type list> \}>}
+    表示，如 \texttt{<\{ i8, i32 \}>} 表示一个 5 字节的结构体。
+\end{itemize}
+
+\subsection{变量}\label{LLVM-variables}
+
+非匿名变量的命名必须符合 \texttt{[\%@][-a-zA-Z\$.\_][-a-zA-Z\$.\_0-9]*}，且不能与作用域中的其他变量名或函数名冲突。
+
+匿名变量的命名必须符合 \texttt{[\%@](0|[1-9][0-9]*)}，且不能与作用域中的其他变量名或函数名冲突。
+
+变量分为全局变量和局部变量。全局变量以 \texttt @ 开头，如 \texttt{@abc}；局部变量以 \texttt \% 开头，如 \texttt{\%abc}。
+
+变量能且只能被赋值一次。
+
+\subsection{常量}\label{LLVM-constants}
+
+常量有
+\begin{itemize}
+  \item boolean 常量: 仅有 \texttt{true}，\texttt{false} 两个字符串，类型为 \texttt{i1}。
+  \item int 常量：支持所有标准的整数。
+  \item 空指针常量：仅支持字符串 \texttt{null}，类型为 \texttt{ptr}。
+\end{itemize}
+
+\textit{如需使用其他常量，请参见\href{https://llvm.org/docs/LangRef.html\#constants}{官方文档}。}
+
+\subsection{函数定义}\label{LLVM-functions}
+
+函数的定义如下：
+
+\begin{lstlisting}[language=llvm]
+define <ResultType> @<FunctionName>(...) { ... }
+\end{lstlisting}
+
+圆括号内为函数参数，参数用逗号分割，每项参数的形式为 \texttt{<type> [name]}。
+
+典型的例子有：
+\begin{itemize}
+  \item 无入参函数 \texttt{int a()}，对应的函数为 \texttt{define i32 \@a() \{...\}}；
+  \item 单入参函数 \texttt{void a(int x)}，对应的函数为 \texttt{define void \@a(i32 \%x) \{...\}}；
+  \item 双入参函数 \texttt{int a(int x1, int x2)}，对应的函数为 \texttt{define i32 \@a(i32 \%x1, i32 \%x2) \{...\}}。
+\end{itemize}
+
+花括号内为函数的语句以及若干标签 (label)。
+
+\textit{关于函数调用，请参见 call 语句 (\ref{LLVM-call-statements})。}
+
+\subsection{语句}\label{LLVM-statements}
+
+\textit{注：以下的介绍中的语法只是 LLVM IR 语法的一部分。关于全部语法，请访问
+\url{https://llvm.org/docs/LangRef.html\#instruction-reference}。同时，每个语句的章节也会附上对应的官方文档链接。}
+
+在 LLVM IR 中，我们一般会用到以下语句：（点击括号中的章节号可以跳转到对应章节）
+
+\begin{itemize}
+  \item 二元运算语句 (\ref{LLVM-binary-statements})
+    \begin{itemize}
+      \item \texttt{add} 语句
+      \item \texttt{sub} 语句
+      \item \texttt{mul} 语句
+      \item \texttt{sdiv} 语句
+      \item \texttt{srem} 语句
+      \item \texttt{shl} 语句
+      \item \texttt{ashr} 语句
+      \item \texttt{and} 语句
+      \item \texttt{or} 语句
+      \item \texttt{xor} 语句
+    \end{itemize}
+  \item 控制流相关语句
+    \begin{itemize}
+      \item \texttt{br} 语句 (\ref{LLVM-br-statements})
+      \item \texttt{ret} 语句 (\ref{LLVM-ret-statements})
+    \end{itemize}
+  \item 内存相关语句
+    \begin{itemize}
+      \item \texttt{alloca} 语句 (\ref{LLVM-alloca-statements})
+      \item \texttt{load} 语句 (\ref{LLVM-load-statements})
+      \item \texttt{store} 语句 (\ref{LLVM-store-statements})
+      \item \texttt{getelementptr} 语句 (\ref{LLVM-gep-statements})
+    \end{itemize}
+  \item 其他语句
+    \begin{itemize}
+      \item \texttt{icmp} 语句 (\ref{LLVM-icmp-statements})
+      \item \texttt{call} 语句 (\ref{LLVM-call-statements})
+      \item \texttt{phi} 语句 (\ref{LLVM-phi-statements})
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{二元运算语句}\label{LLVM-binary-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#binary-operations}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = <operator> <type> <operand1>, <operand2>
+\end{lstlisting}
+
+支持的运算符（对应形式中的 \texttt{operator}）有：
+\begin{itemize}
+  \item add：整数加法
+  \item sub：整数减法
+  \item mul：整数乘法
+  \item sdiv：有符号整数除法
+  \item srem：有符号整数取模
+  \item shl：左移
+  \item ashr：算术右移
+  \item and：按位与
+  \item or：按位或
+  \item xor：异或
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+%_add_result_1 = add i32 %a, %b
+\end{lstlisting}
+
+该语句表示将 \texttt{\%a} 与 \texttt{\%b} 之和存入 \texttt{\%\_add\_result\_1}。
+
+\subsubsection{\texttt{br} 语句}\label{LLVM-br-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#br-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+br i1 <cond>, label <iftrue>, label <iffalse> ; Conditional branch
+br label <dest> ; Unconditional branch
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{cond} 必须是一个 \texttt{i1} 类型的变量；
+  \item \texttt{iftrue}、\texttt{iffalse} 以及 \texttt{dest}
+    必须是所在函数里的一个标签；
+  \item 由于 \texttt{br} 语句的下一个执行的语句一定不是下一条语句，因此一个基础块
+    (basic block) 里的指令中 \texttt{br} 之后的语句是没有意义的。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+br i1 %a, label %label_1, label %label_2 ; Conditional branch
+br label %label_3 ; Unconditional branch
+\end{lstlisting}
+
+第 1 行表示如果 \texttt{\%a} 是 \texttt{true}，则跳转到
+\texttt{label\_1}，否则跳转到 \texttt{label\_2}。第 2 行表示直接跳转到
+\texttt{label\_3}。
+
+\subsubsection{\texttt{ret} 语句}\label{LLVM-ret-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#ret-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+ret <type> <value> ; Return a value from a non-void function
+ret void ; Return from void function
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{value} 的类型必须与 \texttt{type} 和函数的返回类型相同；
+  \item 与 \texttt{br} 语句类似，一个基础块里的 \texttt{ret}
+    语句之后的所有语句都不可达，因此都没有意义。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+ret ptr %a
+ret i32 1
+\end{lstlisting}
+
+第 1 行表示返回 \texttt{\%a}。第 2 行表示返回一个常数 1。
+
+\subsubsection{\texttt{alloca} 语句}\label{LLVM-alloca-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#alloca-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = alloca <type> [, <ty> <NumElements>]
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{result} 的类型是指针类型 (\texttt{ptr})；
+  \item 如果有 \texttt{<ty> <NumElements>}，则表示该指针指向了
+    \texttt{NumElements} 个 \texttt{type} 类型的空间。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+%ptr_1 = alloca i32
+%ptr_2 = alloca i32, i32 5
+\end{lstlisting}
+
+第 1 行表示获得一块 \texttt{sizeof(i32)} 字节的空间，\texttt{ptr\_1} 指向该空间。第 2
+行表示获得一块 \texttt{sizeof(i32)*5} 字节的空间，\texttt{ptr\_2} 指向该空间。
+
+\subsubsection{\texttt{load} 语句}\label{LLVM-load-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#load-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = load <ty>, ptr <pointer>
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{result} 的类型是 \texttt{ty})；
+  \item \texttt{result} 被赋值为 \texttt{pointer} 所指向的值。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+%ptr = alloca i32
+store i32 3, ptr %ptr
+%val = load i32, ptr %ptr
+\end{lstlisting}
+
+第 3 行表示将 \texttt{\%ptr} 所指向的值赋值给 \texttt{\%val}，此处 \texttt{\%val}
+的值为 3。
+
+\subsubsection{\texttt{store} 语句}\label{LLVM-store-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#store-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+store <ty> <value>, ptr <pointer>
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{pointer} 所指向的值会被赋值为 \texttt{value}。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+%ptr = alloca i32
+store i32 3, ptr %ptr
+%val = load i32, ptr %ptr
+\end{lstlisting}
+
+第 2 行表示将 \texttt{\%ptr} 所指向的值赋值为 3。因此第 3 行中，\texttt{\%val}
+的值为 3。
+
+\subsubsection{\texttt{getelementptr} 语句}\label{LLVM-gep-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#getelementptr-instruction}}。
+
+在编译器大作业中，以下的语法可以胜任全部要求：
+\begin{lstlisting}[language=llvm]
+<result> = getelementptr <ty>, ptr <ptrval>{, <ty> <idx>}*
+\end{lstlisting}
+
+\texttt{getelementptr} 语句较为复杂，我们先看一个例子。
+
+对于以下的 C 代码：
+\begin{lstlisting}[language=C]
+struct RT {
+  char A;
+  int B[10][20];
+  char C;
+};
+struct ST {
+  int X;
+  double Y;
+  struct RT Z;
+};
+
+int *foo(struct ST *s) {
+  return &s[1].Z.B[5][13];
+}
+\end{lstlisting}
+对应的 LLVM IR 为
+\begin{lstlisting}[language=llvm]
+%struct.RT = type { i8, [10 x [20 x i32]], i8 }
+%struct.ST = type { i32, double, %struct.RT }
+
+define ptr @foo(ptr %s) {
+entry:
+  %arrayidx = getelementptr %struct.ST, ptr %s, i64 1, i32 2, i32 1, i64 5, i64 13
+  ret ptr %arrayidx
+}
+\end{lstlisting}
+
+可以发现 \texttt{getelementptr} 语句会对类型逐层解析。将 ST 的指针先取下标为 1 的元素，然后访问成员
+\texttt{Z}。由于成员是 \texttt{ST} 的第 2 个元素 (0-based)，因此取下标 2。接下来是取成员
+\texttt{B}，同理由于其为第 1 个元素，取下标 1。\texttt{B} 的类型为一个二维数组，因此取下标 5 后再取下标 13
+即可获得所需的指针。
+
+上面的代码与下面的代码（逐步解引用）等价：
+\begin{lstlisting}[language=llvm]define ptr @foo(ptr %s) {
+  %t1 = getelementptr %struct.ST, ptr %s, i32 1
+  %t2 = getelementptr %struct.ST, ptr %t1, i32 0, i32 2
+  %t3 = getelementptr %struct.RT, ptr %t2, i32 0, i32 1
+  %t4 = getelementptr [10 x [20 x i32]], ptr %t3, i32 0, i32 5
+  %t5 = getelementptr [20 x i32], ptr %t4, i32 0, i32 13
+  ret ptr %t5
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{ty} 为 \texttt{ptrval} 所指向内容的类型，因此
+    \texttt{\%t1 = getelementptr \%struct.ST, ptr \%p, i32 5}
+    表示通过 \texttt{\%struct.ST} 指针获得指向第 5 个 \texttt{ST}
+    的指针（如果需要访问的是指针指向的第 5 个元素，则应当使用
+    \texttt{\%t1 = getelementptr \%struct.ST, ptr \%p, i32 0, i32 5}；
+  \item \texttt{result} 为指向对应成员的指针（一定要注意这一点）；
+  \item 为了方便编写代码，推荐逐步解引用。
+\end{itemize}
+
+\subsubsection{\texttt{icmp} 语句}\label{LLVM-icmp-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#icmp-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = icmp <cond> <ty> <op1>, <op2>
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{cond} 可以是
+    \begin{itemize}
+      \item \texttt{eq}：相等
+      \item \texttt{ne}：不相等
+      \item \texttt{ugt}：无符号大于
+      \item \texttt{uge}：无符号大于等于
+      \item \texttt{ult}：无符号小于
+      \item \texttt{ule}：无符号小于等于
+      \item \texttt{sgt}：有符号大于
+      \item \texttt{sge}：有符号大于等于
+      \item \texttt{slt}：有符号小于
+      \item \texttt{sle}：有符号小于等于
+    \end{itemize}
+  \item \texttt{op1} 和 \texttt{op2} 的类型必须为 \texttt{ty}；
+  \item \texttt{result} 的类型为 \texttt{i32}。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+<result> = icmp eq i32 4, 5
+\end{lstlisting}
+
+该语句的结果为 \texttt{false}。
+
+\subsubsection{\texttt{call} 语句}\label{LLVM-call-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#call-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = call <ResultType> @<FunctionName>(<arguments>)
+call void @<FunctionName>(<arguments>)
+\end{lstlisting}
+
+\begin{itemize}
+  \item 参数列表 (\texttt{arguments}) 中每个参数的格式为
+    \texttt{<ty> <val>}，参数列表的类型以及参数个数必须与函数定义对应；
+  \item \texttt{result} 的类型必须为 \texttt{ResultType}（除非函数不会返回）。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+%result = call i32 @foo1(i32 %arg1)
+call void @foo2(i8 97)
+\end{lstlisting}
+
+\subsubsection{\texttt{phi} 语句}\label{LLVM-phi-statements}
+
+\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#phi-instruction}}。
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = phi <ty> [ <val0>, <label0>], ...
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{phi} 一般放于基本块的开头，用于通过特定的跳转来源来给变量赋值；
+  \item 如果从特定的 label 跳过来，则赋值为对应的值；
+  \item \texttt{result} 的类型必须为 \texttt{ResultType}（除非函数不会返回）。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+Loop:       ; Infinite loop that counts from 0 on up...
+  %indvar = phi i32 [ 0, %LoopHeader ], [ %nextindvar, %Loop ]
+  %nextindvar = add i32 %indvar, 1
+  br label %Loop
+\end{lstlisting}
+
+这段代码表示一个从 0 开始不停增加的循环，如果第 2 行的代码是从 \texttt{LoopHeader}
+这一基本块跳来的，则赋值为 0；如果是从 \texttt{Loop} 这一基本块跳来的，则赋值为
+\texttt{\%nextindvar}。
+
+\texttt{phi} 语句可以大大减少 \texttt{alloca} 的使用，减少内存访问的次数，进而提升效率。因此
+\texttt{phi} 语句在编译器优化过程中非常常见。
+
+\section{从抽象语法树到中间语言}\label{AST-to-IR}
 
 \section{从中间语言到目标代码}
 
