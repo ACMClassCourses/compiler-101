@@ -585,6 +585,27 @@ Loop:       ; Infinite loop that counts from 0 on up...
 
 \section{从抽象语法树到中间语言}\label{AST-to-IR}
 
+\textit{注意：由于现在绝大多数电脑都是 64 位的，而我们的目标平台是 32
+位的，因此如果你想要在自己的电脑上运行 IR，你需要加上 \texttt{-m32} 参数（如果你的电脑兼容
+32 位指令集）或使用模拟器（如 qemu）。}
+
+\subsection{为内建函数及内建成员方法生成对应的 IR}
+
+为内建函数及内建成员方法生成对应的 IR 的最方便的办法是使用 C
+语言编写内建函数和内建成员方法，然后使用 clang 转换。
+
+不过，由于 C 函数名不能包含 \texttt{.}，因此对于内建类的内建成员方法，我们可以用下划线或其他可以出现在函数名中的字符代替。比如成员方法
+\texttt{string.ord} 可以被改名成 \texttt{string\_ord}，然后在生成 IR 之后将
+\texttt{string\_ord} 转换为 \texttt{string.ord}。
+
+具体来说，你可以执行以下指令（假设你编写的 C 语言文件名位 \texttt{builtin.c}，且内建类有 \texttt{string} 和 \texttt{array}）
+\begin{lstlisting}[language=sh]
+clang -emit-llvm --target=riscv32-unknown-elf -O2 -fno-builtin-printf -fno-builtin-memcpy \
+    builtin.c -o builtin_intermediate.ll
+sed 's/string_/string./g;s/array_/array./g' builtin_intermediate.ll > builtin.ll
+rm builtin_intermediate.ll
+\end{lstlisting}
+
 \section{从中间语言到目标代码}
 
 \subsection{RISC-V 汇编}
