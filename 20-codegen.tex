@@ -592,12 +592,17 @@ Loop:       ; Infinite loop that counts from 0 on up...
 \ref{AST-to-IR-details}。主要的工作在于为每个语法特性编写相应的转换逻辑
 (\ref{AST-to-IR-specific-grammar})。除此以外，还需要解决
 IR 的转换过程的一些小问题——如命名问题 (\ref{AST-to-IR-naming})、
-初始化问题 (\ref{AST-to-IR-initializing})、内建函数相关问题
+初始化问题 (\ref{AST-to-IR-initializing})、内建功能相关问题
 (\ref{AST-to-IR-for-builtin})。
 
 在转换的过程中，你可以使用线上平台来辅助思考转换的逻辑。关于线上平台，参见章节
 \ref{online-LLVM-env}。如果你不希望出现匿名变量，可以加上
 \texttt{-fno-discard-value-names} 参数。
+
+虽然本章中所有的 LLVM IR 的例子都是字符串形式的，但是在实际编写代码的时候不需要转换为字符串，而是应该转换为
+LLVM IR 的文字形式对应的节点。节点的设计因人而异，但是整体上，每个翻译单元的根节点指向了所有的全局变量和函数，函数节点一定指向了所有的基本块以及入口点，每个基本块节点一定指向了里面的所有语句，且最后一条语句总是
+\texttt{br} 或 \texttt{ret} 语句，每个语句节点都记录了里面需要用到的变量和类型。此外，建议保留转换到
+LLVM IR 字符形式的接口，以便调试和测试。
 
 \textit{注意：由于现在绝大多数电脑都是 64 位的，而我们的目标平台是 32
 位的，因此如果你想要在自己的电脑上运行 IR，你需要加上 \texttt{-m32} 参数（如果你的电脑兼容
@@ -609,7 +614,12 @@ LLVM IR 的全局一共只有全局变量和全局函数两种内容。全局变
 中的全局变量和字符串字面量，转换时需要注意初始化过程
 (\ref{AST-to-IR-initializing})；全局函数对应 Mx* 中的函数和成员方法。
 
-除此以外，我们还需要处理内建函数和内建方法，但这个部分较为简单，详见章节
+Mx* 语言的设计决定了所有的类在使用时的行为与 C++
+的引用一致，而引用在底层设计上是指针。因此，所有的类在传参和使用的过程中实际上都是指针。
+
+需要说明的一点是 Mx* 不能够在作用域结束之后就把分配的堆空间释放，因为分配的内存有可能会通过返回值传递到作用域外中。因此程序会发生内存泄漏。但在初级编译阶段，内存泄漏的问题不在我们的考虑范围内。
+
+除此以外，我们还需要处理内建功能，详见章节
 \ref{AST-to-IR-for-builtin}。
 
 \subsection{为 IR 的变量、类及函数命名}\label{AST-to-IR-naming}
@@ -664,13 +674,22 @@ entry:
 }
 \end{lstlisting}
 
+关于字符串字面量，请参考字符串的实现章节 (\ref{AST-to-IR-for-builtin-string})。
+
 \subsection{为每个语法特性编写相应的转换逻辑}\label{AST-to-IR-specific-grammar}
 
 \subsubsection{处理语句}\label{AST-to-IR-statements}
 
 \subsubsection{处理表达式}\label{AST-to-IR-expression}
 
-\subsection{为内建函数及内建成员方法生成对应的 IR}\label{AST-to-IR-for-builtin}
+\subsection{内建功能实现}\label{AST-to-IR-for-builtin}
+
+关于 Mx* 内建功能的实现，我们将会分为内建函数及成员方法的实现
+(\ref{AST-to-IR-for-builtin-func})、\texttt{string} 的实现
+(\ref{AST-to-IR-for-builtin-string})、数组的实现
+(\ref{AST-to-IR-for-builtin-array}) 几部分来讲。
+
+\subsubsection{为内建函数及内建成员方法生成对应的 IR}\label{AST-to-IR-for-builtin-func}
 
 为内建函数及内建成员方法生成对应的 IR 的最方便的办法是使用 C
 语言编写内建函数和内建成员方法，然后使用 clang 转换。
@@ -686,6 +705,33 @@ clang -emit-llvm --target=riscv32-unknown-elf -O2 -fno-builtin-printf -fno-built
 sed 's/string_/string./g;s/array_/array./g' builtin_intermediate.ll > builtin.ll
 rm builtin_intermediate.ll
 \end{lstlisting}
+
+\subsubsection{\texttt{string} 的实现}\label{AST-to-IR-for-builtin-string}
+
+一个典型的 \texttt{string} 实现就是 C 风格的字符串，即连续的字符数组。前文已经提及，所有的类（\texttt{string}
+也可以被当成一个类）在穿参和使用时都会被当成指针，因此 \texttt{string}
+可以被实现为指向字符数组的指针。
+
+对于字符串字面量，可以使用字符串数组实现，由于全局变量是对应类型的指针，因此得到的全局变量就是我们需要的字符串，比如对于字符串
+\texttt{"Mx*"}，对应的 LLVM IR 为
+\begin{lstlisting}[language=llvm]
+@.str = private unnamed_addr constant [12 x i8] c"Mx*\00"
+\end{lstlisting}
+
+如果不考虑转换成字符串形式的 IR，实际上此处字符串无需转义，但如果要转换成字符串形式的
+IR，需要将换行符 \texttt{'$\backslash$n'} 转换成 \texttt{'$\backslash$0A'}，反斜杠
+\texttt{'$\backslash$'} 转换成 \texttt{'$\backslash\backslash$'}，双引号
+\texttt{'$\backslash$'} 转换成 \texttt{'$\backslash$22'}。
+
+除了字符串字面量外，所有的字符串都是由 \texttt{string}
+相关内建函数及内建方法完成的。对于内建函数，只需要保证使用的和获得的是指向对应字符数组的指针即可。
+
+\subsubsection{数组的实现}\label{AST-to-IR-for-builtin-array}
+
+对于 Mx* 中的数组，我们需要记录两个信息——数组本身和数组长度。
+
+关于数组，有多种实现。一种是将数组当成一个类，其内部有两个成员，一个是指向数组的指针，一个是数组的长度，这种实现的问题在于每次访问成员需要解引用多次，造成性能损失。。另一种实现是将数组对象当成指向数组的指针，数组长度放在数组前的
+4 Bytes 中。
 
 \section{从中间语言到目标代码}
 
