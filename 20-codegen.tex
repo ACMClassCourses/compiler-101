@@ -100,52 +100,55 @@ int foo(int* a, int b) {
 }
 \end{lstlisting}
 
-在 \texttt{-emit-llvm -O1} 参数下，会生成下面的代码（下面的代码去掉了生成代码的
-attribute 部分和一些注释，这些内容我们在编译器大作业中应该用不到）
+在 \texttt{-emit-llvm -O1 -fno-discard-value-names}
+参数下，会生成下面的代码（下面的代码去掉了生成代码的 attribute
+部分和一些注释，这些内容我们在编译器大作业中应该用不到）
 
 \begin{lstlisting}[language=llvm]
 @c = dso_local local_unnamed_addr global i32 0, align 4, !dbg !0
 
-define dso_local i32 @foo(ptr noundef readonly %0, i32 noundef %1) local_unnamed_addr #0 !dbg !15 {
-  call void @llvm.dbg.value(metadata ptr %0, metadata !20, metadata !DIExpression()), !dbg !22
-  call void @llvm.dbg.value(metadata i32 %1, metadata !21, metadata !DIExpression()), !dbg !22
-  %3 = icmp eq ptr %0, null, !dbg !23
-  br i1 %3, label %9, label %4, !dbg !25
+define dso_local i32 @foo(ptr noundef readonly %a, i32 noundef %b) local_unnamed_addr #0 !dbg !15 {
+entry:
+  call void @llvm.dbg.value(metadata ptr %a, metadata !20, metadata !DIExpression()), !dbg !22
+  call void @llvm.dbg.value(metadata i32 %b, metadata !21, metadata !DIExpression()), !dbg !22
+  %cmp = icmp eq ptr %a, null, !dbg !23
+  br i1 %cmp, label %return, label %if.end, !dbg !25
 
-4:                                                ; preds = %2
-  %5 = load i32, ptr %0, align 4, !dbg !26
-  %6 = add nsw i32 %5, %1, !dbg !31
-  %7 = load i32, ptr @c, align 4, !dbg !32
-  %8 = add nsw i32 %6, %7, !dbg !33
-  br label %9, !dbg !34
+if.end:                                           ; preds = %entry
+  %0 = load i32, ptr %a, align 4, !dbg !26
+  %add = add nsw i32 %0, %b, !dbg !31
+  %1 = load i32, ptr @c, align 4, !dbg !32
+  %add1 = add nsw i32 %add, %1, !dbg !33
+  br label %return, !dbg !34
 
-9:                                                ; preds = %2, %4
-  %10 = phi i32 [ %8, %4 ], [ 0, %2 ], !dbg !22
-  ret i32 %10, !dbg !35
+return:                                           ; preds = %entry, %if.end
+  %retval.0 = phi i32 [ %add1, %if.end ], [ 0, %entry ], !dbg !22
+  ret i32 %retval.0, !dbg !35
 }
 \end{lstlisting}
 
 进一步地，我们还可以忽略一些 debug 参数、一些无用的参数（如
-\texttt{dso\_local}   \texttt{local\_unnamed\_addr} 和
+\texttt{dso\_local}、\texttt{local\_unnamed\_addr} 和
 \texttt{align}）以及不必要的 debug 函数，这样可以得到以下的代码
 
 \begin{lstlisting}[language=llvm]
 @c = global i32 0
 
-define i32 @foo(ptr %0, i32 %1) {
-  %3 = icmp eq ptr %0, null
-  br i1 %3, label %9, label %4
+define i32 @foo(ptr %a, i32 %b) {
+entry:
+  %cmp = icmp eq ptr %a, null
+  br i1 %cmp, label %return, label %if.end
 
-4:                                      ; preds = %2
-  %5 = load i32, ptr %0
-  %6 = add nsw i32 %5, %1
-  %7 = load i32, ptr @c
-  %8 = add nsw i32 %6, %7
-  br label %9
+if.end:                       ; preds = %entry
+  %0 = load i32, ptr %a
+  %add = add i32 %0, %b
+  %1 = load i32, ptr @c
+  %add1 = add i32 %add, %1
+  br label %return
 
-9:                                      ; preds = %2, %4
-  %10 = phi i32 [ %8, %4 ], [ 0, %2 ]
-  ret i32 %10
+return:                       ; preds = %entry, %if.end
+  %retval.0 = phi i32 [ %add1, %if.end ], [ 0, %entry ]
+  ret i32 %retval.0
 }
 \end{lstlisting}
 
