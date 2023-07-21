@@ -43,7 +43,7 @@ SSA)，即变量能且仅能被赋值一次，这一特性可以让编译器的�
 
 \section{LLVM 15 环境}
 
-\subsection{在线 LLVM 环境}
+\subsection{在线 LLVM 环境}\label{online-LLVM-env}
 
 在学习 LLVM 的过程中，一个方便的使用环境非常重要。Godbolt (
 \url{https://godbolt.org/}) 提供了几乎所有的编译器，并且可以编译到大量平台。
@@ -585,11 +585,89 @@ Loop:       ; Infinite loop that counts from 0 on up...
 
 \section{从抽象语法树到中间语言}\label{AST-to-IR}
 
+生成中间语言 (IR) 的过程是非常 “机械” 的，整体的逻辑见章节
+\ref{AST-to-IR-details}。主要的工作在于为每个语法特性编写相应的转换逻辑
+(\ref{AST-to-IR-specific-grammar})。除此以外，还需要解决
+IR 的转换过程的一些小问题——如命名问题 (\ref{AST-to-IR-naming})、
+初始化问题 (\ref{AST-to-IR-initializing})、内建函数相关问题
+(\ref{AST-to-IR-for-builtin})。
+
+在转换的过程中，你可以使用线上平台来辅助思考转换的逻辑。关于线上平台，参见章节
+\ref{online-LLVM-env}。如果你不希望出现匿名变量，可以加上
+\texttt{-fno-discard-value-names} 参数。
+
 \textit{注意：由于现在绝大多数电脑都是 64 位的，而我们的目标平台是 32
 位的，因此如果你想要在自己的电脑上运行 IR，你需要加上 \texttt{-m32} 参数（如果你的电脑兼容
 32 位指令集）或使用模拟器（如 qemu）。}
 
-\subsection{为内建函数及内建成员方法生成对应的 IR}
+\subsection{转换方式概览}\label{AST-to-IR-details}
+
+LLVM IR 的全局一共只有全局变量和全局函数两种内容。全局变量对应 Mx*
+中的全局变量和字符串字面量，转换时需要注意初始化过程
+(\ref{AST-to-IR-initializing})；全局函数对应 Mx* 中的函数和成员方法。
+
+除此以外，我们还需要处理内建函数和内建方法，但这个部分较为简单，详见章节
+\ref{AST-to-IR-for-builtin}。
+
+\subsection{为 IR 的变量、类及函数命名}\label{AST-to-IR-naming}
+
+在 LLVM IR 中，要求全局变量和局部变量内部不能出现命名冲突。但是高级语言中，作用域使得命名会发生冲突，并遵循
+variable shadowing 原则。一些语言会允许类名称与变量名重复。此外，在命名过程中，还要防止
+IR 中内建的变量、类以及函数与用户的命名不会冲突。
+
+对于命名冲突，一般有以下集中解决方案：
+\begin{enumerate}
+ \item 给变量加上前缀或后缀（通常是后缀）。这在 variable shadowing 下非常常见。比如，有一个作用域中已经有变量
+   \texttt x，其内部又有一个作用域中声明了另一个变量 \texttt x，可以将其重命名为
+   \texttt{x.1}。
+ \item 选择一些高级语言不可使用的名称作为 identifier。这在内建函数和类的成员方法中非常常见。常见的不可使用的名称有不可出现在
+   identifier 中的符号（如 \texttt{.}）、关键词。比如类 \texttt A 的成员方法
+   \texttt{B}，就可以命名为 \texttt{A.B}；内建类 \texttt{string} 的成员方法
+   \texttt{ord}，就可以命名为 \texttt{string.ord}（因为 \texttt{string}）是关键词。
+\end{enumerate}
+
+Mx* 中的函数都是全局的，因此不会出现命名冲突。类的方法可以通过
+\texttt{<ClassName>.<MethodName>} 来解决冲突。受到 variable shadowing
+影响的变量可以通过在后面加上 \texttt{.<n>} 来解决冲突。n 的值可以在语法检查时完成。
+
+\subsection{为变量进行初始化}\label{AST-to-IR-initializing}
+
+对于全局变量，由于 LLVM IR 中的全局变量需要指定一个初始的值，因此我们可以利用这个值。
+
+如果变量被一个定值初始化，那么我们就直接将这个常量初始化。比如我们有这样的一个全局变量
+\begin{lstlisting}[language=C]
+int i = 1;
+\end{lstlisting}
+对应的 LLVM IR 为
+\begin{lstlisting}[language=C]
+@i = global i32 0
+\end{lstlisting}
+
+如果变量初始化的值无法在此时决定，那么我们需要借助运行期来完成初始化。一个可行的解决方案是将初始化过程放到初始化函数中。如前文中对命名的解决方案
+(\ref{AST-to-IR-naming})，我们可以给这个函数起名为 \texttt{\_init}，然后在
+\texttt{main} 函数中调用 \texttt{\_init}。比如我们有一个这样的全局变量
+\begin{lstlisting}[language=C]
+int i = j;
+\end{lstlisting}
+对应的 LLVM IR 为
+\begin{lstlisting}[language=C]
+@i = global i32 0
+
+define void @_init() {
+entry:
+  %0 = load i32, ptr @f
+  store i32 %0, ptr @c
+  ret void
+}
+\end{lstlisting}
+
+\subsection{为每个语法特性编写相应的转换逻辑}\label{AST-to-IR-specific-grammar}
+
+\subsubsection{处理语句}\label{AST-to-IR-statements}
+
+\subsubsection{处理表达式}\label{AST-to-IR-expression}
+
+\subsection{为内建函数及内建成员方法生成对应的 IR}\label{AST-to-IR-for-builtin}
 
 为内建函数及内建成员方法生成对应的 IR 的最方便的办法是使用 C
 语言编写内建函数和内建成员方法，然后使用 clang 转换。
