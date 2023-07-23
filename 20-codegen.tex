@@ -168,7 +168,7 @@ LLVM 15 的基本语法包含
   \item 变量，如 \texttt{\@a = global i32 0} 以及
     \texttt{\%a = ...}，具体参见章节 \ref{LLVM-variables}；
   \item 常量，具体参见章节 \ref{LLVM-constants}；
-  \item 函数定义，如 \texttt{define i32 \@foo(ptr \%0, i32 \%1) \{...\}}，具体参见章节
+  \item 函数定义及声明，如 \texttt{define i32 \@foo(ptr \%0, i32 \%1) \{...\}}，具体参见章节
     \ref{LLVM-functions}；
   \item 标签 (label)，如 \texttt{4:}；
   \item 语句，如 \texttt{\%3 = icmp eq ptr \%0, null}，具体参见章节
@@ -219,9 +219,9 @@ LLVM 15 的基本语法包含
 
 \textit{如需使用其他常量，请参见\href{https://llvm.org/docs/LangRef.html\#constants}{官方文档}。}
 
-\subsection{函数定义}\label{LLVM-functions}
+\subsection{函数定义及声明}\label{LLVM-functions}
 
-函数的定义如下：
+函数的定义方式如下：
 
 \begin{lstlisting}[language=llvm]
 define <ResultType> @<FunctionName>(...) { ... }
@@ -237,6 +237,15 @@ define <ResultType> @<FunctionName>(...) { ... }
 \end{itemize}
 
 花括号内为函数的语句以及若干标签 (label)。
+
+函数的声明方式如下：
+
+\begin{lstlisting}[language=llvm]
+declare <ResultType> @<FunctionName>(...)
+\end{lstlisting}
+
+声明的形式基本上和定义一致，只不过去掉了函数体，前面的 \texttt{define} 被换成了
+\texttt{declare}。
 
 \textit{关于函数调用，请参见 call 语句 (\ref{LLVM-call-statements})。}
 
