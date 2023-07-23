@@ -643,7 +643,7 @@ Mx* 中的函数都是全局的，因此不会出现命名冲突。类的方法�
 \texttt{<ClassName>.<MethodName>} 来解决冲突。受到 variable shadowing
 影响的变量可以通过在后面加上 \texttt{.<n>} 来解决冲突。n 的值可以在语法检查时完成。
 
-\subsection{为变量进行初始化}\label{AST-to-IR-initializing}
+\subsection{为全局变量进行初始化}\label{AST-to-IR-initializing}
 
 对于全局变量，由于 LLVM IR 中的全局变量需要指定一个初始的值，因此我们可以利用这个值。
 
@@ -678,9 +678,163 @@ entry:
 
 \subsection{为每个语法特性编写相应的转换逻辑}\label{AST-to-IR-specific-grammar}
 
+每个翻译单元有若干全局变量，若干函数，若干类。本章中，我们会一一讲解这些部分的转换逻辑。推荐在写对应的逻辑的时候，先与
+\texttt{clang} 生成的代码比较，避免出现理解上的错误。
+
+全局变量的处理非常简单，LLVM IR 中的全局变量已经是指向对应类型的指针，因此基本上无需操作，唯一的困难点在于初始化，参见上文变量初始化部分
+(\ref{AST-to-IR-initializing})。
+
+函数的处理分为几个部分——函数的参数和函数名处理、函数体的转换。前者较为简单，只要将参数的类型转换成
+IR 中对应的类型即可，函数名无需更改，直接使用原函数名。后者的转换实际上是一个语句块的转换，需要对每个语句进行逐句转换。关于语句的处理，参见语句处理章节
+(\ref{AST-to-IR-statements})。
+
+类的处理分为类的成员变量、类的方法（成员函数）和构造函数三个部分。
+\begin{itemize}
+  \item Mx* 中，类的所有变量不是静态的
+    (static)，因此每个类的实例中都必须包含所有变量。利用 LLVM IR 的结构类型（见
+    \ref{LLVM-types}），我们可以将所有成员变量打包成与个类，如对于类
+    \texttt{class A \{ int a; int b; \};}
+    只需要在 IR 的全局声明 \texttt{\%class.A = \{ i32, i32 \}}
+    即可。
+  \item 类的方法处理过程其实与普通函数不同，唯一的区别在于需要在函数参数传入指向对应类的指针（即
+    \texttt{this} 指针），通常的做法是将函数的第一个入参作为对应类指针。
+  \item 对于构造函数，需要注意的是，如果有在类中标记变量的初始化表达式，需要先计算出对应的值并将其赋给对应变量，然后再执行
+    Mx* 中的构造函数中的内容。另外需要注意空间分配的问题，由于一般将全局变量放在静态部分（不会在运行期申请全局变量的空间），而构造函数也有可能要处理全局变量，所以一般来说，构造函数并不会为这个类申请空间（如局部变量需要交给
+    \texttt{new} 表达式来做，全局变量会事先分配对应的空间），因此构造函数需要
+    \texttt{this} 指针作为入参。
+\end{itemize}
+
 \subsubsection{处理语句}\label{AST-to-IR-statements}
 
+Mx* 中，有五种语句——变量声明语句、条件语句、循环语句、跳转语句、表达式语句。我们会一一解释针对每一种语句如何进行转换。
+
+对于变量声明语句，LLVM IR 专门涉及了 \texttt{alloca} 语句
+(\ref{LLVM-alloca-statements})，以减轻前端编写的难度。因此，每次遇到变量声明语句，我们就将经修改后的变量名（修改变量名是为了避免变量重名，参见章节
+\label{AST-to-IR-naming}）用 \texttt{alloca} 语句声明。为了方便，通常我们会将
+\texttt{alloca} 语句放在每个函数的入口基本块中。比如对于以下代码，
+\begin{lstlisting}[language=C++]
+int foo() {
+    int a;
+    {
+        int a;
+    }
+    return a;
+}
+\end{lstlisting}
+其对应的 IR 可以是
+\begin{lstlisting}
+define i32 @doo() {
+entry:
+  %a = alloca i32
+  %a.1 = alloca i32
+  ret i32 %a
+}
+\end{lstlisting}
+
+对于条件语句，我们需要先计算表达式，然后判断条件是否满足，然后跳到对应的分支。比如对于以下的代码，
+\begin{lstlisting}[language=C++]
+bool a = true;
+
+int foo() {
+    int b;
+    if (a) b = 1;
+    else b = 0;
+    return b;
+}
+\end{lstlisting}
+其对应的 IR 可以是
+\begin{lstlisting}[language=LLVM]
+define i32 @foo() {
+entry:
+  %b = alloca i32
+  %a.val.1 = load i1, ptr @a
+  br i1 %a.val.1, label %true_0, label %false_0
+true_0:
+  store i32 1, ptr %b
+  br label %condition_end_0
+false_0:
+  store i32 0, ptr %b
+  br label %condition_end_0
+condition_end_0:
+  %b.val.2 = load i32, ptr %b
+  ret i32 %b.val.2
+}
+\end{lstlisting}
+
+对于循环语句和跳转语句，最多需要有五个部分——初始化部分（这部分可以不需要一个新基本块，沿用原基本块即可）、循环条件部分、循环体部分和更新
+(step) 部分、循环结束部分，每个部分都是一个基本块。\texttt{break}
+语句需要跳转到循环结束部分，而 \texttt{continue}
+需要跳转到更新部分（如果有）或循环条件部分（如果没有更新部分）。\texttt{return}
+只需要让函数返回即可。比如对下面的代码，
+\begin{lstlisting}[language=C++]
+void foo() {
+    int a = 0;
+    for (int i = 0; i < 100; ++i) {
+        if (i == 50) break;
+        if (i == 51) continue;
+        a = a + i;
+    }
+}
+int main() {}
+\end{lstlisting}
+其对应的 IR 可以是
+\begin{lstlisting}[language=LLVM]
+define void @foo() {
+entry:
+  %a = alloca i32
+  %i = alloca i32
+  store i32 0, ptr %a
+  store i32 0, ptr %i
+  br label %loop_condition_0
+loop_condition_0:
+  %i.val.1 = load i32, ptr %i
+  %__comp.2 = icmp slt i32 %i.val.1, 100
+  br i1 %__comp.2, label %loop_body_0, label %loop_end_0
+loop_body_0:
+  %i.val.3 = load i32, ptr %i
+  %__comp.4 = icmp eq i32 %i.val.3, 50
+  br i1 %__comp.4, label %true_0, label %condition_end_0
+true_0:
+  br label %loop_end_0
+condition_end_0:
+  %i.val.5 = load i32, ptr %i
+  %__comp.6 = icmp eq i32 %i.val.5, 51
+  br i1 %__comp.6, label %true_1, label %condition_end_1
+true_1:
+  br label %step_0
+condition_end_1:
+  %a.val.7 = load i32, ptr %a
+  %i.val.8 = load i32, ptr %i
+  %__binary.9 = add i32 %a.val.7, %i.val.8
+  store i32 %__binary.9, ptr %a
+  br label %step_0
+step_0:
+  %__update.old.10 = load i32, ptr %i
+  %__update.new.11 = add i32 %__update.old.10, 1
+  store i32 %__update.new.11, ptr %i
+  br label %loop_condition_0
+loop_end_0:
+  ret void
+}
+\end{lstlisting}
+
+表达式部分只需要处理表达式即可，参见章节 \ref{AST-to-IR-expression}。
+
 \subsubsection{处理表达式}\label{AST-to-IR-expression}
+
+绝大多数表达式都是很容易转换的，只要注意好行为以及表达式的类型，一般不会发生问题。不过，\texttt{new}
+表达式和逻辑表达式的处理较为复杂。
+
+对于 \texttt{new} 表达式，其最大的难点在于如何解决多层数组。思路一般是在 IR
+上手动实现循环，来给各层的数组初始化。另一种实现是在抽象语法树 (AST)
+上实现循环。
+
+另外，在处理 \texttt{new} 表达式的过程中，一定要注意如果当前层已经涉及类对象，一定要为类对象分配空间，并调用构造函数。如果当前层仍然对应数组，最好给所有的数组初始化为
+\texttt{null}。
+
+对于逻辑表达式，需要注意的一点是短路求值，如果前一个表达式已经足以确定逻辑表达式的结果时，就不能够执行后一个表达式了。要想实现这个逻辑，必须将表达式分为两个基础块，分别执行左边和右边的表达式，首先执行左边的表达式，然后通过
+\texttt{br} (\ref{LLVM-br-statements})
+判断是否需要继续执行后一个表达式，如果要执行，就跳到右边表达式对应的部分，否则跳到之后的语句。
 
 \subsection{内建功能实现}\label{AST-to-IR-for-builtin}
 
@@ -692,7 +846,7 @@ entry:
 \subsubsection{为内建函数及内建成员方法生成对应的 IR}\label{AST-to-IR-for-builtin-func}
 
 为内建函数及内建成员方法生成对应的 IR 的最方便的办法是使用 C
-语言编写内建函数和内建成员方法，然后使用 clang 转换。
+语言编写内建函数和内建成员方法，然后使用 clang 转换，并在用户输入的源代码对应的 IR 中声明对应的函数。
 
 不过，由于 C 函数名不能包含 \texttt{.}，因此对于内建类的内建成员方法，我们可以用下划线或其他可以出现在函数名中的字符代替。比如成员方法
 \texttt{string.ord} 可以被改名成 \texttt{string\_ord}，然后在生成 IR 之后将
@@ -730,7 +884,7 @@ IR，需要将换行符 \texttt{'$\backslash$n'} 转换成 \texttt{'$\backslash$
 
 对于 Mx* 中的数组，我们需要记录两个信息——数组本身和数组长度。
 
-关于数组，有多种实现。一种是将数组当成一个类，其内部有两个成员，一个是指向数组的指针，一个是数组的长度，这种实现的问题在于每次访问成员需要解引用多次，造成性能损失。。另一种实现是将数组对象当成指向数组的指针，数组长度放在数组前的
+关于数组，有多种实现。一种是将数组当成一个类，其内部有两个成员，一个是指向数组的指针，一个是数组的长度，这种实现的问题在于每次访问成员需要解引用多次，造成性能损失。另一种实现是将数组对象当成指向数组的指针，数组长度放在数组前的
 4 Bytes 中。
 
 \section{从中间语言到目标代码}
