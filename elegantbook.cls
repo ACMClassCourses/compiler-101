@@ -404,7 +404,7 @@
 
 
 \RequirePackage[
-  backend=bibtex,
+  backend=\ELEGANT@bibend,
   citestyle=\ELEGANT@citestyle,
   bibstyle=\ELEGANT@bibstyle]{biblatex}
 
