@@ -16,49 +16,75 @@
 % 切忌抄袭。\\
 
 \section{语法检查摘要}
-语法检查阶段需要完成词法分析、语法分析、语义分析。在本作业中，词法分析和语法分析可以使用现有的分析库（本章节将以ANTLR为例）将源代码转换为语法树。
+语法检查阶段需要完成词法分析、语法分析、语义分析。在本作业中，词法分析和语法分析可以使用现有的分析库将源代码转换为语法树。
 随后，你可以将语法树转换为抽象语法树从而更好地表达代码的结构。本阶段的最后一步需要你在树（语法树和抽象语法树均可）上进行语法检查（例如：简单的类型检查、if/while/for等语句的表达式合法性等），确保代码符合规则。
 
 接下来，我们将首先讲解对于semantic阶段工作的整体理解，再对具体的实现步骤逐步解析。
 
+\begin{remark}
+    \textbf{本章节的示例为语言为Java，语法分析器为ANTLR。}
+\end{remark}
+
 \section{总览}
-语法检查阶段的难点都与AST有关，分别是如何构建AST以及如何在AST上遍历进行语法检查。前者属于工程性难点，后者属于工程细节。
+语法检查阶段的难点都与AST有关，分别是如何构建AST以及如何在AST上遍历进行语法检查。两个步骤的难点主要在工程实现。
+ANTLR能够将我们编写的语法规则（g4文件）生成对应的parser和lexer，并构建一棵语法树。ANTLR为这棵语法树提供了Listener和Visitor的借口，便于我们提取其中的信息，
+我们希望能够自定义树的每个结点，并储存需要的信息。因此，我们将继承ANTLR生成的Listener或Visitor，通过遍历语法树构建一棵抽象语法树（AST）。
+最后，在抽象语法树上进行遍历，对源代码的语法进行检查。
 
+分步骤来看，这个阶段你需要完成的任务有：
+\begin{enumerate}
+    \item 为语言编写文法分析文件（g4文件）；
+    \item 继承ANTLR生成的Visitor或Listener实现对ANTLR的语法树遍历，并同时构建抽象语法树（可选）；
+    \item 遍历语法树或抽象语法树对源代码进行语法检查。
+\end{enumerate}
 
-semantic部分的难点，主要在于如何构建AST。AST即abstract syntax tree，指抽象语法树。通俗地说，我们将源代转换成用树的结构来表示，
-这棵树叫做AST。antlr4能够为我们完成lexer和parser，并提供接口便于我们提取其中的信息，我们希望能够自定义树的每个结点，并储存需要的
-信息，所以我们将继承antlr4生成的类，然后构建一棵属于我们的AST。\\
+% 一份Mx代码将被转换成一棵AST，这棵树从RootNode开始，随着树的层数的加深，
+% 每层的结点所表示的单位逐渐变小。下面是基于Mx的一个AST层级的简单示意：
+% \begin{lstlisting}
+% RootNode 
+% - VariableDef
+% - ClassDefinition
+%     - VariableDefinition
+%     - FuncDefinition
+% - FunctionDefinition - Statements - Expressions 
+% \end{lstlisting}
 
-在一切工作开始之前，我们先根据Mx语言的规定，整体了解一下我们的AST。 \\
+% Mx语言下，对这个结构进行一点简单的注解：\\
+% 1. RootNode从全局作用域开始。Mx的全局作用域中只存在全局变量、类定义、全局函数三种类型。\\
+% 2. 类定义中，只存在变量和函数。 \\
+% 3. 一个函数包含多个statement(语句)。在AST中，一个函数中的每个statement都是这个函数节点的子节点。
+% statement有许多种类型，比如if语句、循环语句(for、while)等等。\\
+% 4. expression(表达式)有许多种类型，比如基本表达式(primary)、常量表达式(constant)、赋值表达式(assignment)等等。 \\
+% 5. 关于Mx所使用的statement和expression，Mx文档中均有明确的规定，概念模糊的同学可以先仔细阅读。 \\
 
-一份Mx代码将被转换成一棵AST，这棵树从RootNode开始，随着树的层数的加深，
-每层的结点所表示的单位逐渐变小。下面是基于Mx的一个AST层级的简单示意：
+% 如果你对以上结构感到费解，可以仔细阅读Yx库中的g4文件(Yx/src/parser/Yx.g4)辅助理解，或者继续阅读下一部分中对于如何构建AST的详细介绍，
+% 准确地理解AST的结构将会大大提高效率。\\
+
+% \section{实现方法概述}
+% 在这一部分，我们将逐任务剖析如何完成语法检查阶段。
+
+\section{语法分析}
+\subsection{语法描述文件}
+我们采用ANTLR构建语法树，我们需要先写一个Mx.g4文件，用来描述Mx的语法。在这里我们以Yx-Compiler% Cite: 庄老师的repo
+为例子讲述如何撰写一个ANTLR下的语法描述文件。
 \begin{lstlisting}
-RootNode 
-- VariableDef
-- ClassDefinition
-    - VariableDefinition
-    - FuncDefinition
-- FunctionDefinition - Statements - Expressions 
+Int : 'int';
+DecimalInteger
+    : [1-9] [0-9]*
+    | '0'
+    ;
 \end{lstlisting}
 
-Mx语言下，对这个结构进行一点简单的注解：\\
-1. RootNode从全局作用域开始。Mx的全局作用域中只存在全局变量、类定义、全局函数三种类型。\\
-2. 类定义中，只存在变量和函数。 \\
-3. 一个函数包含多个statement(语句)。在AST中，一个函数中的每个statement都是这个函数节点的子节点。
-statement有许多种类型，比如if语句、循环语句(for、while)等等。\\
-4. expression(表达式)有许多种类型，比如基本表达式(primary)、常量表达式(constant)、赋值表达式(assignment)等等。 \\
-5. 关于Mx所使用的statement和expression，Mx文档中均有明确的规定，概念模糊的同学可以先仔细阅读。 \\
+将撰写的g4文件传递给ANTLR后，ANTLR会生成以下文件：
+\begin{enumerate}
+    \item \texttt{MxLexer.java}: 词法分析器。
+    \item \texttt{MxParser.java}: 语法分析器，用于生成语法树。
+    \item \texttt{MxBaseListener.java}: Listener类，用于遍历语法树。
+    \item \texttt{MxBaseVisitor.java}: Visitor类，用于遍历语法树。
+    \item \texttt{MxListener.java}: Listener接口。
+    \item \texttt{MxVisitor.java}: Visitor接口。
+\end{enumerate}
 
-如果你对以上结构感到费解，可以仔细阅读Yx库中的g4文件(Yx/src/parser/Yx.g4)辅助理解，或者继续阅读下一部分中对于如何构建AST的详细介绍，
-准确地理解AST的结构将会大大提高效率。\\
-
-\section{Practical Methods}
-以下是semantic部分的具体实现过程。
-
-\subsection{About antlr4}
-antlr4是一个强大的解析器生成器。在我们的实现中，我们需要先写一个Mx.g4文件，用来描述Mx的语法，然后运行ANTLR命令，
-生成MxLexer.java, MxParser.java等文件。\\
 
 antlr4的安装、运行等等内容，请阅读《antlr4权威指南》第一部分的相应内容(pdf已下发，17页开始)。\\
 
