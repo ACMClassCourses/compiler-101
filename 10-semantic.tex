@@ -67,6 +67,8 @@ ANTLR能够将我们编写的语法规则（g4文件）生成对应的parser和l
 \subsection{语法描述文件}
 我们采用ANTLR构建语法树，我们需要先写一个Mx.g4文件，用来描述Mx的语法。在这里我们以Yx-Compiler% Cite: 庄老师的repo
 为例子讲述如何撰写一个ANTLR下的语法描述文件。
+
+首先我们需要定义词法，以下的代码将'int'字符串识别为Int，将整数识别为DecimalInteger（思考：这里如果要支持小数该怎么写呢？）。词法规则是有顺序的。
 \begin{lstlisting}
 Int : 'int';
 DecimalInteger
@@ -74,6 +76,8 @@ DecimalInteger
     | '0'
     ;
 \end{lstlisting}
+
+
 
 将撰写的g4文件传递给ANTLR后，ANTLR会生成以下文件：
 \begin{enumerate}
