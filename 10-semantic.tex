@@ -68,7 +68,7 @@ ANTLR能够将我们编写的语法规则（g4文件）生成对应的parser和l
 我们采用ANTLR构建语法树，我们需要先写一个Mx.g4文件，用来描述Mx的语法。在这里我们以Yx-Compiler% Cite: 庄老师的repo
 为例子讲述如何撰写一个ANTLR下的语法描述文件。
 
-首先我们需要定义词法，以下的代码将\texttt{int}字符串识别为Int，将整数识别为DecimalInteger（思考：这里如果要支持小数该怎么写呢？）。
+首先我们需要定义词法，以下的代码将\texttt{int}字符串识别为Int，将整数（以1-9开头且以0-9为后续字符的字符串、字符0）识别为DecimalInteger（思考：这里如果要支持小数该怎么写呢？）。
 词法规则是有顺序的，在下面的例子中，\texttt{int}既可以是Int，也可以是Identifier，但我们只希望它被识别为Int，所以我们将Int写在前面。
 \begin{lstlisting}
 Int : 'int';
@@ -76,11 +76,63 @@ DecimalInteger
     : [1-9] [0-9]*
     | '0'
     ;
-Identifier
-    : [a-zA-Z] [a-zA-Z_0-9]*
-    ;
+Identifier : [a-zA-Z] [a-zA-Z_0-9]*;
 \end{lstlisting}
 
+
+
+撰写完成词法规则之后，需要撰写对应的语法规则。
+在介绍这部分之前，我们先对语句类型进行简单的划分。
+一个函数包含多个statement(语句)，statement有许多种类型，比如if语句、循环语句(for、while)等等。
+注意，书写这部分之前，需要充分理解semantic overview部分提到的AST结构，
+以减少后续写代码时回头重新修改g4文件的次数。
+Yx的Parser部分如下：
+\begin{lstlisting}
+program: 'int main()' suite EOF;
+
+varDef : Int Identifier ('=' expression)? ';';
+
+suite : '{' statement* '}';
+
+statement
+    : suite                                                 #block
+    | varDef                                                #vardefStmt
+    | If '(' expression ')' trueStmt=statement 
+        (Else falseStmt=statement)?                         #ifStmt
+    | Return expression? ';'                                #returnStmt
+    | expression ';'                                        #pureExprStmt
+    | ';'                                                   #emptyStmt
+    ;
+
+expression
+    : primary                                               #atomExpr
+    | expression op=('+' | '-') expression                  #binaryExpr
+    | expression op=('==' | '!=' ) expression               #binaryExpr
+    | <assoc=right> expression '=' expression               #assignExpr
+    ;
+
+primary
+    : '(' expression ')'
+    | Identifier 
+    | literal 
+    ;
+
+literal
+    : DecimalInteger
+    ;
+\end{lstlisting}
+值得一提，代码中第一行的program表示的是一份Yx代码在全局作用域体现的结构，也是AST的根节点
+中会存储的内容。Yx语言中，全局作用域内只有main函数，所以Yx.g4的program比较简单。\\
+
+Tips: \\
+1. 对于Mx，如果觉得Lexer和Parser置于同一文件中过于复杂，可以考虑分为两个文件(MxLexer.g4, MxParser.g4)来书写。
+整合方法可自行查阅。\\
+2. 如果你使用IDEA，可以基于你写的g4文件，输入一段Mx代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{image/g4.png}
+    \caption{样例}
+\end{figure}
 
 
 将撰写的g4文件传递给ANTLR后，ANTLR会生成以下文件：
