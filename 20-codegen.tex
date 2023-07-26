@@ -900,7 +900,7 @@ IR，需要将换行符 \texttt{'\textbackslash{}n'} 转换成 \texttt{'\textbac
 
 在之前的章节中，我们已经了解如何将抽象语法树转化为
 IR。在本章节中，我们会介绍如何将之前生成的 IR 转化为 RV32GC 汇编。
-我们编译器的测试用的模拟是 ravel，仓库位于 \url{https://github.com/Engineev/ravel}。
+我们编译器的测试用的模拟器是 ravel，仓库位于 \url{https://github.com/Engineev/ravel}。
 
 \textit{本章中，你可以使用 llc 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是}
 \texttt{llc --march=riscv32 <src.ll>}\textit{。}
@@ -915,7 +915,9 @@ IR。在本章节中，我们会介绍如何将之前生成的 IR 转化为 RV32
 方便进行数据对齐，类中的变量占用的空间均为 4 Bytes。
 
 全局变量的处理只需要将其转化为汇编形式的全局变量即可。访问时可以通过标签访问，
-标签可以当作指针。
+标签可以当作指针。在转换字符串时，需要注意要将换行符、反斜杠、双引号分别转义为
+\texttt{'\textbackslash{}n'}、\texttt{'\textbackslash\textbackslash'}、
+\texttt{'\textbackslash"'}。
 
 对于函数的转换，我们需要完成局部变量的内存分配、函数指令的转换，并遵循函数调用的约定，
 具体参见将 IR 函数转换为汇编章节 (\ref{IR-func-to-asm})。
@@ -978,7 +980,9 @@ a:
   \item \texttt{.word <number>} 表示一个 word 大小的数据。
   \item \texttt{.zero <size>} 表示连续 size 个全为 0 的字节。
   \item \texttt{.size <symbol\_name>, <size>} 表示对应的符号所占的字节数。
-  \item \texttt{.asciz} 表示一个 ASCII 字符串（字符串最后会自动加上结束符 \texttt{\textbackslash0})。
+  \item \texttt{.asciz} 表示一个 ASCII 字符串
+    （字符串最后会自动加上结束符 \texttt{\textbackslash0})。与之相对的是，\texttt{.ascii}，
+    这个指令不会自动在后面加上结束符 \texttt{\textbackslash0}。
   \item 除了刚才的特殊符号外，每行还可以是汇编指令。通常来说，汇编指令分为指令和伪指令
     (pseudo-instructions)，后者通常可以转化为一条或多条（真）指令。
     伪指令的意义在于将一些经常出现的行为用更好的方式进行包装，比如如果我需要将一个寄存器
@@ -1005,7 +1009,7 @@ a:
 关于具体内存分配的方式，每个函数能够支配的内存只有栈（使用 malloc 的除外，
 一般函数中的局部变量等不会使用堆空间）。你可以使用的栈为进入函数时 \texttt{sp}
 指向地址以下的内存（不包含 \texttt{sp} 所指向的地址），因此如果需要使用栈，只需要减少
-\texttt{sp} 的值即可，比如需要使用 \texttt{64 Bytes} 的栈，那么就在函数开头执行
+\texttt{sp} 的值即可，比如需要使用 64 Bytes 的栈，那么就在函数开头执行
 \texttt{addi sp, sp, -64}，在函数返回前执行 \texttt{addi sp, sp, 64}。需要注意的是，
 根据 RISC-V 规范，栈空间需要 16 Bytes 对齐，因此栈空间必须是 16 Bytes 的倍数。
 
@@ -1013,8 +1017,25 @@ a:
 然后取足够放下这些变量的 16 Bytes 的倍数即可。方便进行数据对齐，
 类中的变量占用的空间均为 4 Bytes。
 
-函数指令的转换的过程较为繁琐，且思路非常简单清晰，本章中不会具体讲解如何转换。
-如果对转换过程有疑惑的，可以通过 llc 辅助了解。
+函数指令的转换的过程较为繁琐，且思路非常简单清晰，本章中不会逐个具体讲解如何转换。
+如果对转换过程有疑惑的，可以通过 llc 辅助了解。下面我们会以将 IR 函数调用转换为汇编为例，
+详细解释转换的过程。
+
+对于下面的语句：
+\begin{lstlisting}[language=LLVM]
+  %_call_result.1 = call i32 @foo(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, i32 %a8, i32 %a9)
+\end{lstlisting}
+
+我们注意到这条语句调用的函数超过了函数参数传递可用的寄存器的个数，因此会有一部分参数
+（此处为 \texttt{\%a9}）必须放在栈上传递。对于一个函数调用，我们需要：
+\begin{itemize}
+  \item 首先在函数调用前，我们必须将函数参数准备好。对于这个例子，我们需要将
+    \texttt{\%a1}—\texttt{\%a7} 分别存放在 \texttt{a0-7} 里面。
+  \item 接着，我们调用函数。在这个例子中，我们可以使用 \texttt{call foo} 来调用
+    \texttt{foo} 函数。
+  \item 最后，我们需要将 \texttt{a0} 寄存器中的值存入到 \texttt{\%\_call\_result.1}
+    对应的位置。
+\end{itemize}
 
 \subsection{RISC-V Calling Convention}\label{RV-calling-convention}
 
@@ -1038,6 +1059,8 @@ Calling Convention，函数的第一至第八个入参分别存放于 \texttt{a0
 (callee) 保存（参见表 \ref{RV-calling-convention}）。如果是调用者 (caller)
 保存，那么调用者需要先保存这一部分的寄存器（如果寄存器被使用过），然后调用函数；如果是被调用者
 (callee) 保存，那么被调用者如果要使用对应的寄存器，需要先保存寄存器原来的值，然后在返回前保存寄存器的值。
+
+在一个标准调用约定中，\texttt{sp} 始终保持 16 字节对齐。
 
 \begin{table}[htb]
 \centering
