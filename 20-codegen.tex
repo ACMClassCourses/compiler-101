@@ -882,9 +882,9 @@ rm builtin_intermediate.ll
 \end{lstlisting}
 
 如果不考虑转换成字符串形式的 IR，实际上此处字符串无需转义，但如果要转换成字符串形式的
-IR，需要将换行符 \texttt{'$\backslash$n'} 转换成 \texttt{'$\backslash$0A'}，反斜杠
-\texttt{'$\backslash$'} 转换成 \texttt{'$\backslash\backslash$'}，双引号
-\texttt{'$\backslash$'} 转换成 \texttt{'$\backslash$22'}。
+IR，需要将换行符 \texttt{'\textbackslash{}n'} 转换成 \texttt{'\textbackslash{}0A'}，反斜杠
+\texttt{'\textbackslash'} 转换成 \texttt{'\textbackslash\textbackslash'}，双引号
+\texttt{'\textbackslash'} 转换成 \texttt{'\textbackslash22'}。
 
 除了字符串字面量外，所有的字符串都是由 \texttt{string}
 相关内建函数及内建方法完成的。对于内建函数，只需要保证使用的和获得的是指向对应字符数组的指针即可。
@@ -898,6 +898,166 @@ IR，需要将换行符 \texttt{'$\backslash$n'} 转换成 \texttt{'$\backslash$
 
 \section{从中间语言到目标代码}
 
-\subsection{RISC-V 汇编}
+在之前的章节中，我们已经了解如何将抽象语法树转化为
+IR。在本章节中，我们会介绍如何将之前生成的 IR 转化为 RV32GC 汇编。
+我们编译器的测试用的模拟是 ravel，仓库位于 \url{https://github.com/Engineev/ravel}。
 
-\subsection{RISC-V Calling Convention}
+\textit{本章中，你可以使用 llc 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是}
+\texttt{llc --march=riscv32 <src.ll>}\textit{。}
+
+\subsection{转换方式概览}
+
+一个 IR 文件有一些类定义、一些全局变量、一些函数。我们需要将这些部分一一转换为汇编。
+
+类定义的的处理较为简单，因为类定义只用于记录类中元素的类型信息。
+对于内存来说，不存在所谓「类」的概念——所有的处理都应当是对于内存数据的。
+我们类定义仅仅用于提供每个类的大小、元素的位置。此外，为了尽可能方便转换，
+方便进行数据对齐，类中的变量占用的空间均为 4 Bytes。
+
+全局变量的处理只需要将其转化为汇编形式的全局变量即可。访问时可以通过标签访问，
+标签可以当作指针。
+
+对于函数的转换，我们需要完成局部变量的内存分配、函数指令的转换，并遵循函数调用的约定，
+具体参见将 IR 函数转换为汇编章节 (\ref{IR-func-to-asm})。
+
+关于 RISC-V 汇编的内容参见 RISC-V 汇编章节 (\ref{RV-asm-intro})。
+
+\subsection{RISC-V 汇编}\label{RV-asm-intro}
+
+汇编是一种低级的编程语言。所谓低级，就是指不存在高级的抽象，
+而是直接明确对寄存器、内存的操作。每种指令集都有自己的汇编语言，用于转化成机器码。
+
+与直接的机器码不同的是，汇编支持将多个汇编文件执行，
+汇编文件之间可以跨文件共享一部分标签。比如对于我们的编译器来说，
+我们需要结合内建函数和生成的函数来执行这个程序。
+
+RISC-V 汇编用于表示可以执行在 RISC-V 指令集上的程序。具体的汇编指令见官方文档中
+assembly 的部分（如果你使用的是
+\href{https://riscv.org/wp-content/uploads/2019/12/riscv-spec-20191213.pdf}{20191213
+的 specification}，汇编在第 25 章）。
+
+下面的代码是一个基础的 RISC-V 汇编程序：（我们会对每个语法逐一进行解释）
+\begin{lstlisting}
+	.section	text
+	.globl	print
+	.type	print,@function
+print:
+	lui	a1, %hi(.L.str)
+	addi	a1, a1, %lo(.L.str)
+	mv	a2, a0
+	mv	a0, a1
+	mv	a1, a2
+	tail	printf
+.Lfunc_end0:
+	.size	print, .Lfunc_end0-print
+
+	.section data
+	.globl	a
+a:
+	.word	1
+
+	.section rodata
+.L.str:
+	.asciz	"%s"
+	.size	.L.str, 3
+\end{lstlisting}
+\begin{itemize}
+  \item \texttt{.section <section\_name>} 表示从此处开始到下一个
+    \texttt{.section} 之间内容所归属的部分。通常程序会有
+    \texttt{.text}、\texttt{.bss}、\texttt{.data}、\texttt{.rodata}
+    这几个部分。\texttt{.text} 一般用于存放指令；\texttt{.bss}
+    段在初始化过程中会被全部以 0 初始化，一般用于存放一些需要以 0 初始化的可读可写数据，
+    如全局数组；\texttt{.data} 段用于存放指定的可读可写数据，如一些指定初始化值的变量，
+    \texttt{.rodata} 段用于存放只读数据，如字符串字面量。
+  \item \texttt{.globl <label>} 允许 label 在全局被访问（其他汇编文件可以使用全局的标签），
+    通常用于函数及变量。
+  \item \texttt{.type <symbol\_name>, <type\_description>} 是可选的，用于表明符号的类型。
+    通常会利用 \texttt{.type} 来提升代码可读性。
+  \item \texttt{<label>:} 表示这是一个标签，表示一个内存地址，其类似于 LLVM IR
+    中的标签，但更注重内存方面的性质。
+  \item \texttt{.word <number>} 表示一个 word 大小的数据。
+  \item \texttt{.zero <size>} 表示连续 size 个全为 0 的字节。
+  \item \texttt{.size <symbol\_name>, <size>} 表示对应的符号所占的字节数。
+  \item \texttt{.asciz} 表示一个 ASCII 字符串（字符串最后会自动加上结束符 \texttt{\textbackslash0})。
+  \item 除了刚才的特殊符号外，每行还可以是汇编指令。通常来说，汇编指令分为指令和伪指令
+    (pseudo-instructions)，后者通常可以转化为一条或多条（真）指令。
+    伪指令的意义在于将一些经常出现的行为用更好的方式进行包装，比如如果我需要将一个寄存器
+    (x10) 的值赋值给另一个寄存器 (x11)，如果用真的指令，那么对应的指令可以是
+    \texttt{addi x11, x10, 0}，但伪指令 \texttt{mv} 让我们可以使用
+    \texttt{mv x11, x10} 来代替刚才的指令，这样的逻辑更为清晰。
+  \item 注释以分号 (\texttt{;}) 开头。
+\end{itemize}
+
+\subsection{将 IR 函数转换为汇编}\label{IR-func-to-asm}
+
+前面已经在概览中说过，对于函数的转换，我们需要完成局部变量的内存分配、函数指令的转换，
+并遵循函数调用的约定。RISC-V Calling Convention 章节
+(\ref{RV-calling-convention}) 详细介绍了函数调用的约定。
+
+我们在 IR 时提过，\texttt{\%} 开头的变量为局部变量，在转换为汇编时，
+我们通常也会称之为「虚拟寄存器」。如何将虚拟寄存器分配到实际寄存器的过程成为「寄存器分配」。
+一个最简单的分配方式就是将所有虚拟寄存器存放于内存中，并按需读写，但是在这个方式下，
+程序的性能会受到非常严重的影响，因为读写内存相对于读写寄存器来说是一个相当慢的过程。
+本章中，我们就以这种方式（将所有虚拟寄存器存放于内存中）进行寄存器分配，
+更高级的分配策略将会在下一个章节的寄存器分配中提到。除此以外，\texttt{alloca}
+语句也需要为对应的数据分配空间。
+
+关于具体内存分配的方式，每个函数能够支配的内存只有栈（使用 malloc 的除外，
+一般函数中的局部变量等不会使用堆空间）。你可以使用的栈为进入函数时 \texttt{sp}
+指向地址以下的内存（不包含 \texttt{sp} 所指向的地址），因此如果需要使用栈，只需要减少
+\texttt{sp} 的值即可，比如需要使用 \texttt{64 Bytes} 的栈，那么就在函数开头执行
+\texttt{addi sp, sp, -64}，在函数返回前执行 \texttt{addi sp, sp, 64}。需要注意的是，
+根据 RISC-V 规范，栈空间需要 16 Bytes 对齐，因此栈空间必须是 16 Bytes 的倍数。
+
+因此本章中，我们只需要统计最大使用的栈空间（不要忘记调用函数时，参数也会占用栈空间），
+然后取足够放下这些变量的 16 Bytes 的倍数即可。方便进行数据对齐，
+类中的变量占用的空间均为 4 Bytes。
+
+函数指令的转换的过程较为繁琐，且思路非常简单清晰，本章中不会具体讲解如何转换。
+如果对转换过程有疑惑的，可以通过 llc 辅助了解。
+
+\subsection{RISC-V Calling Convention}\label{RV-calling-convention}
+
+对于函数来说，如果要将其转化成汇编，如何处理入参和返回值以及如何处理寄存器的储存是我们必须解决的问题。
+针对这些问题，RISC-V 制定了一套规则 (RISC-V Calling Convention)
+来统一，确保函数能够保持其正确的行为，官方文档位于
+\url{https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf}。
+
+在 RISC-V 的 32 个通用整型寄存器中，有几个寄存器在使用时一般会有特定的用途。表
+\ref{RV-calling-convention} 列举了文档中每个寄存器通常的用途。
+
+由于 Mx* 中函数调用的参数的类型最多只有 32 位且都是整型（函数调用只会用到指针类型、\texttt{int}
+类型、\texttt{bool} 类型），在进行函数调用时，每个参数都使用一个寄存器。因此根据 RISC-V
+Calling Convention，函数的第一至第八个入参分别存放于 \texttt{a0-7} 中，
+剩下的参数将存放于栈中（\texttt{sp} 指向第一个放不下的参数），返回值放在
+\texttt{a0}。
+
+另一个问题在于，当函数调用另一个函数时，寄存器的值会被更改，造成潜在的问题。
+一个简单的解决方案是在调用前保存全部寄存器，但这样会导致函数调用时需要多次读写内存，
+造成不必要的性能损失，因此 RISC-V 文档中约定了每个寄存器应当由调用者 (caller) 还是被调用者
+(callee) 保存（参见表 \ref{RV-calling-convention}）。如果是调用者 (caller)
+保存，那么调用者需要先保存这一部分的寄存器（如果寄存器被使用过），然后调用函数；如果是被调用者
+(callee) 保存，那么被调用者如果要使用对应的寄存器，需要先保存寄存器原来的值，然后在返回前保存寄存器的值。
+
+\begin{table}[htb]
+\centering
+\begin{tabular}{|c|c|c|c|}
+\hline
+寄存器 & ABI 名称 & 用途 & 保存者 \\
+\hline
+\texttt{x0} & \texttt{zero} & 始终为 0 & - \\
+\texttt{x1} & \texttt{ra} & 返回地址 (return address) & Caller \\
+\texttt{x2} & \texttt{sp} & 栈指针 (Stack pointer) & Callee \\
+\texttt{x3} & \texttt{gp} & 全局指针 (Global pointer) & - \\
+\texttt{x4} & \texttt{tp} & 线程指针 (Thread pointer) & - \\
+\texttt{x5-7} & \texttt{t0-2} & 临时量 & Caller \\
+\texttt{x8} & \texttt{s0}/\texttt{fp} & 调用者保存数据 (Saved register)/帧指针 (frame pointer) & Callee \\
+\texttt{x9} & \texttt{s1} & 调用者保存数据 (Saved register) & Callee \\
+\texttt{x10-11} & \texttt{a0-1} & 函数参数/返回值 & Caller \\
+\texttt{x12-17} & \texttt{a2-7} & 函数参数 & Caller \\
+\texttt{x18-27} & \texttt{s2-11} & 调用者保存数据 (Saved register) & Callee \\
+\texttt{x28-31} & \texttt{t3-6} & 临时量 & Caller \\
+\hline
+\end{tabular}
+\caption{RISC-V Calling Convention 寄存器}\label{RV-calling-convention}
+\end{table}
