@@ -701,7 +701,7 @@ IR 中对应的类型即可，函数名无需更改，直接使用原函数名�
 \begin{itemize}
   \item Mx* 中，类的所有变量不是静态的
     (static)，因此每个类的实例中都必须包含所有变量。利用 LLVM IR 的结构类型（见
-    \ref{LLVM-types}），我们可以将所有成员变量打包成一个类，如对于类
+    \ref{LLVM-types}），我们可以将所有成员变量打包到一起，如对于类
     \texttt{class A \{ int a; int b; \};}
     只需要在 IR 的全局声明 \texttt{\%class.A = \{ i32, i32 \}}
     即可。
