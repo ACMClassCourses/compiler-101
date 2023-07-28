@@ -689,8 +689,8 @@ int i = j;
 
 define void @_init() {
 entry:
-  %0 = load i32, ptr @f
-  store i32 %0, ptr @c
+  %0 = load i32, ptr @j
+  store i32 %0, ptr @i
   ret void
 }
 \end{lstlisting}
