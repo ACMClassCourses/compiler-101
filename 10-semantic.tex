@@ -84,16 +84,13 @@ Identifier : [a-zA-Z] [a-zA-Z_0-9]*;
 撰写完成词法规则之后，需要撰写对应的语法规则。
 在介绍这部分之前，我们先对语句类型进行简单的划分。
 一个函数包含多个statement(语句)，statement有许多种类型，比如if语句、循环语句(for、while)等等。
-注意，书写这部分之前，需要充分理解semantic overview部分提到的AST结构，
-以减少后续写代码时回头重新修改g4文件的次数。
-Yx的Parser部分如下：
+注意，书写这部分之前，需要先对抽象语法树上可能存在的节点有个大致的规划。一般地，我们会设计Statement抽象类和Expression抽象类。
+所有具体的语句都继承Statement，各种具体的表达式都继承Expression。
+而针对具体的语句，需要根据语法定义要求规划节点类型。
+例如，对if语句（IfStmt）节点，需要包括一个表达式节点（ExpressionNode）表达条件，两个语句（Statements）分别代表条件为真（True Statement）或假（False Statement）的语句。
+
+以Yx的Statement部分为例：
 \begin{lstlisting}
-program: 'int main()' suite EOF;
-
-varDef : Int Identifier ('=' expression)? ';';
-
-suite : '{' statement* '}';
-
 statement
     : suite                                                 #block
     | varDef                                                #vardefStmt
@@ -103,180 +100,17 @@ statement
     | expression ';'                                        #pureExprStmt
     | ';'                                                   #emptyStmt
     ;
-
-expression
-    : primary                                               #atomExpr
-    | expression op=('+' | '-') expression                  #binaryExpr
-    | expression op=('==' | '!=' ) expression               #binaryExpr
-    | <assoc=right> expression '=' expression               #assignExpr
-    ;
-
-primary
-    : '(' expression ')'
-    | Identifier 
-    | literal 
-    ;
-
-literal
-    : DecimalInteger
-    ;
 \end{lstlisting}
-值得一提，代码中第一行的program表示的是一份Yx代码在全局作用域体现的结构，也是AST的根节点
-中会存储的内容。Yx语言中，全局作用域内只有main函数，所以Yx.g4的program比较简单。\\
-
-Tips: \\
-1. 对于Mx，如果觉得Lexer和Parser置于同一文件中过于复杂，可以考虑分为两个文件(MxLexer.g4, MxParser.g4)来书写。
-整合方法可自行查阅。\\
-2. 如果你使用IDEA，可以基于你写的g4文件，输入一段Mx代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.7\textwidth]{image/g4.png}
-    \caption{样例}
-\end{figure}
+在这部分代码中，定义了statement包括ifStmt、returnStmt等几种Statement，而ifStmt中表达式节点将会被解析为expression(在ANTLR的Visitor中为visitifStmt函数的\texttt{ctx.expression()})，另外两个Statement将会被分别解析为\texttt{trueStmt}和\texttt{falseStmt}。
 
 
-将撰写的g4文件传递给ANTLR后，ANTLR会生成以下文件：
+当你完成词法和语法对应规则的书写之后，语法描述文件的实现完成。以下是一些小贴士：
 \begin{enumerate}
-    \item \texttt{MxLexer.java}: 词法分析器。
-    \item \texttt{MxParser.java}: 语法分析器，用于生成语法树。
-    \item \texttt{MxBaseListener.java}: Listener类，用于遍历语法树。
-    \item \texttt{MxBaseVisitor.java}: Visitor类，用于遍历语法树。
-    \item \texttt{MxListener.java}: Listener接口。
-    \item \texttt{MxVisitor.java}: Visitor接口。
+    \item 对于Mx，如果觉得Lexer和Parser置于同一文件中过于复杂，可以考虑分为两个文件(MxLexer.g4, MxParser.g4)来书写。
+    \item 如果你使用IDEA，可以基于你写的g4文件，输入一段Mx代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
+    \item antlr4的其他详细内容，请参照《antlr4权威指南》。
 \end{enumerate}
 
-
-antlr4的安装、运行等等内容，请阅读《antlr4权威指南》第一部分的相应内容(pdf已下发，17页开始)。\\
-
-antlr4的其他详细内容，请参照《antlr4权威指南》。
-
-\subsection{Write the Grammar}
-关于g4文件如何书写，《antlr4权威指南》中已经给出了详细的指导，可以结合Yx的代码理解。\\
-
-下面结合Yx.g4，简单介绍一下g4文件各部分内容的意义(完整代码请移步Yx)：\\
-
-1. Lexer 词法分析。\\
-Yx的Lexer部分如下：
-\begin{lstlisting}
-    Int : 'int';
-    If : 'if';
-    Else : 'else';
-    Return : 'return';
-    
-    LeftParen : '(';
-    RightParen : ')';
-    LeftBracket : '[';
-    RightBracket : ']';
-    LeftBrace : '{';
-    RightBrace : '}';
-    
-    Less : '<';
-    LessEqual : '<=';
-    Greater : '>';
-    GreaterEqual : '>=';
-    LeftShift : '<<';
-    RightShift : '>>';
-    
-    Plus : '+';
-    Minus : '-';
-    
-    And : '&';
-    Or : '|';
-    AndAnd : '&&';
-    OrOr : '||';
-    Caret : '^';
-    Not : '!';
-    Tilde : '~';
-    
-    Question : '?';
-    Colon : ':';
-    Semi : ';';
-    Comma : ',';
-    
-    Assign : '=';
-    Equal : '==';
-    NotEqual : '!=';
-    
-    Identifier
-        : [a-zA-Z] [a-zA-Z_0-9]*
-        ;
-    
-    DecimalInteger
-        : [1-9] [0-9]*
-        | '0'
-        ;
-    
-    Whitespace
-        :   [ \t]+
-            -> skip
-        ;
-    
-    Newline
-        :   (   '\r' '\n'?
-            |   '\n'
-            )
-            -> skip
-        ;
-    
-    BlockComment
-        :   '/*' .*? '*/'
-            -> skip
-        ;
-    
-    LineComment
-        :   '//' ~[\r\n]*
-            -> skip
-        ;
-\end{lstlisting}
-值得一提，lexer部分的书写顺序是不可以任意调换的，因为词法分析器会按照g4给出的顺序去识别每个单词。
-比如，在Yx.g4的lexer部分中，仅考虑词法的定义，
-`int'既可以是`Int'，也可以是`Identifier'，但我们只希望它被识别为`Int'，所以我们将`Int'写在前面。\\
-
-2. Parser 语法分析。\\
-注意，书写这部分之前，需要充分理解semantic overview部分提到的AST结构，
-以减少后续写代码时回头重新修改g4文件的次数。
-Yx的Parser部分如下：
-\begin{lstlisting}
-program: 'int main()' suite EOF;
-
-varDef : Int Identifier ('=' expression)? ';';
-
-suite : '{' statement* '}';
-
-statement
-    : suite                                                 #block
-    | varDef                                                #vardefStmt
-    | If '(' expression ')' trueStmt=statement 
-        (Else falseStmt=statement)?                         #ifStmt
-    | Return expression? ';'                                #returnStmt
-    | expression ';'                                        #pureExprStmt
-    | ';'                                                   #emptyStmt
-    ;
-
-expression
-    : primary                                               #atomExpr
-    | expression op=('+' | '-') expression                  #binaryExpr
-    | expression op=('==' | '!=' ) expression               #binaryExpr
-    | <assoc=right> expression '=' expression               #assignExpr
-    ;
-
-primary
-    : '(' expression ')'
-    | Identifier 
-    | literal 
-    ;
-
-literal
-    : DecimalInteger
-    ;
-\end{lstlisting}
-值得一提，代码中第一行的program表示的是一份Yx代码在全局作用域体现的结构，也是AST的根节点
-中会存储的内容。Yx语言中，全局作用域内只有main函数，所以Yx.g4的program比较简单。\\
-
-Tips: \\
-1. 对于Mx，如果觉得Lexer和Parser置于同一文件中过于复杂，可以考虑分为两个文件(MxLexer.g4, MxParser.g4)来书写。
-整合方法可自行查阅。\\
-2. 如果你使用IDEA，可以基于你写的g4文件，输入一段Mx代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.7\textwidth]{image/g4.png}
@@ -284,84 +118,93 @@ Tips: \\
 \end{figure}
 
 
-\subsection{The Parse Part in compiler}
-1. 生成文件解释 \\
-对完成的g4文件，运行antlr4后，将生成一系列文件。下面以Yx为例对部分生成文件进行一个简单地介绍。
-(建议阅读《antlr4权威指南》59页起，对生成文件的描述更加详细。) \\
- - Yx.tokens ANTLR会给我们定义的词法符号指定一个数字形式的类型，然后将他们的对应关系存储到该文件当中。\\
- - YxLexer.java 词法解析类 \\
- - YxParser.java 语法解析类 \\
- - YxListener.java, YxBaseListener.java 监听器 \\
- - YxVisitor.java, YxBaseVisor.java 访问器 \\
-监听器和访问器是antlr4提供的两种遍历方法。两者的具体意义《antlr4权威指南》(49页起)有详细说明。\\
 
-2. 调用生成代码完成lexer和parser \\
-如何在我们的代码中调用antlr4生成的文件来完成lexer和paerser？Yx的main文件给出了示例。
-下面的代码是Yx的部分代码：\\
+
+\section{抽象语法树}
+
+将撰写的g4文件传递给ANTLR后，ANTLR会生成以下文件（以Yx为例）：
+\begin{enumerate}
+    \item \texttt{YxLexer.java}: 词法分析器。
+    \item \texttt{YxParser.java}: 语法分析器，用于生成语法树。
+    \item \texttt{YxBaseListener.java}: Listener类，用于遍历语法树。
+    \item \texttt{YxBaseVisitor.java}: Visitor类，用于遍历语法树。
+    \item \texttt{YxListener.java}: Listener接口。
+    \item \texttt{YxVisitor.java}: Visitor接口。
+\end{enumerate}
+Listener和Visitor是antlr4提供的两种遍历方法。两者的具体意义《antlr4权威指南》(49页起)有详细说明。
+这些Listener和Visitor可以被用于遍历语法树。在此之前，我们先调用如下代码让ANTLR构建语法树，\texttt{parseTreeRoot}即为语法树的根节点。
 \begin{lstlisting}
-    YxLexer lexer = new YxLexer(CharStreams.fromStream(input));     // 1
-    lexer.removeErrorListeners();                                   // 2
-    lexer.addErrorListener(new YxErrorListener());                  // 3    
-    YxParser parser = new YxParser(new CommonTokenStream(lexer));   // 4
-    parser.removeErrorListeners();                                  // 5
-    parser.addErrorListener(new YxErrorListener());                 // 6
-    ParseTree parseTreeRoot = parser.program();                     // 7
+YxLexer lexer = new YxLexer(CharStreams.fromStream(input));
+lexer.removeErrorListeners();
+lexer.addErrorListener(new YxErrorListener());
+YxParser parser = new YxParser(new CommonTokenStream(lexer));
+parser.removeErrorListeners();
+parser.addErrorListener(new YxErrorListener());
+ParseTree parseTreeRoot = parser.program();
 \end{lstlisting}
 
-3. 自定义error \\
-antlr4在lexer和parser的过程中，能够发现词法、语法错误，而具体的异常类可以自定义。
-这里可以参考Yx对于YxErrorListener类的处理。
+\begin{remark}
+    ANTLR在lexer和parser的过程中，能够发现词法、语法错误，而具体的异常类可以自定义。\textbf{并不是所有ANTLR抛出的错误都是需要处理的错误。}具体请参考Yx对于YxErrorListener类的处理。
+\end{remark}
 
-\subsection{Design and Build the AST}
-这部分的代码相当琐碎，且涉及到你对AST结构的理解，可以结合Yx代码仔细研究。
-
-\subsubsection{ASTNode}
-现在，我们需要建一棵AST。那么首先，我们需要为每一个节点定义一个类，来保存各自需要的信息，
-从而构成一棵树。这里的树形结构和g4的语法结构本质上是一致的。\\
+现在，我们可以通过parseTreeRoot得到语法树的根节点，并依次需要建一棵AST。那么首先，我们需要为每一个节点定义一个类，来保存各自需要的信息，
+从而构成一棵树。这里的树形结构和g4的语法结构本质上是一致的。
 以下是Yx给出的ifStmtNode类的定义作为例子：
-\begin{lstlisting}
-    package AST;
-
-    import Util.position;
-    
-    public class ifStmtNode extends StmtNode {
-        ExprNode condition;
-        StmtNode thenStmt, elseStmt;
-    
-        public ifStmtNode(ExprNode condition, StmtNode thenStmt, StmtNode elseStmt, position pos) {
-            super(pos);
-            this.condition = condition;
-            this.thenStmt = thenStmt;
-            this.elseStmt = elseStmt;
-        }
-    
-        @Override
-        public void accept(ASTVisitor visitor) {
-            visitor.visit(this);
-        }
+\begin{lstlisting}[language=Java]
+abstract public class ASTNode {
+    public position pos; // 用于存储节点所指代的对源代码范围
+    public ASTNode(position pos) {
+        this.pos = pos;
     }
+    // 每个ASTNode都包括一个accept方法，可以用来遍历AST
+    abstract public void accept(ASTVisitor visitor);
+}
+// Statement的抽象类，所有的Statement继承自这个节点。
+// 同时这个节点也是ASTNode的派生类。
+public abstract class StmtNode extends ASTNode {
+    public StmtNode(position pos) {
+        super(pos);
+    }
+}
+
+public class ifStmtNode extends StmtNode {
+    ExprNode condition; // 用于存储Expression（条件）
+    StmtNode thenStmt, elseStmt; // 分别用于存储上文的trueStmt和falseStmt
+    public ifStmtNode(ExprNode condition, StmtNode thenStmt, StmtNode elseStmt, position pos) {
+        super(pos);
+        this.condition = condition;
+        this.thenStmt = thenStmt;
+        this.elseStmt = elseStmt;
+    }
+    
+    // 继承ASTNode的accept方法，将会跳转到对应的ASTVisitor进行节点访问。
+    @Override
+    public void accept(ASTVisitor visitor) {
+        visitor.visit(this);
+    }
+}
 \end{lstlisting}
 
 
-\subsubsection{ASTBuilder}
-在上述的Parse Part结束后，antlr4生成的代码为我们构建了一棵parse tree(即代码第7行的parseTreeRoot)。
-你可以认为，parse tree已经具有一个理想的树的结构，但是它保存的信息不足以满足我们的需求，
-故我们仍然需要建立一个AST，读取parse tree并增添我们需要的内容。\\
 
-antlr4生成的文件中，MxBaseVisitor提供了可以显式访问parse tree子结点的接口，所以
-ASTBuilder类将继承MxBaseVisitor类，然后访问parse tree的各个节点，将
-需要的信息依次读入自定义的各种ASTNode类中，构建自己的AST树。\\
+\subsection{构建AST}
+ANTLR生成的文件中，BaseVisitor提供了可以显式访问parse tree子结点的接口，所以ASTBuilder类将继承MxBaseVisitor类，然后访问parse tree的各个节点，将需要的信息依次读入自定义的各种ASTNode类中，构建自己的AST树。
+构建AST的过程是一个递归的过程。
 
-关于MxBaseVisitor提供的接口如何使用，可以参考Yx代码。 \\
-
-以下是Yx给出的一个例子：
+在这里，我们仍然以if语句为例子，在语法描述文件中，我们定义if语句的方式是\texttt{If '(' expression ')' trueStmt=statement (Else falseStmt=statement)?}。
+其中包括了\texttt{expression}、\texttt{trueStmt}、\texttt{falseStmt}。
+在这里，需要对每个语句中的部分构建出对应的子树并连接在一个if节点。
 \begin{lstlisting}
-@Override public ASTNode visitVarDef(YxParser.VarDefContext ctx) {
-    String name = ctx.Identifier().toString();
-    ExprNode expr = null;
-    if (ctx.expression() != null) expr = (ExprNode)visit(ctx.expression());
-
-    return new varDefStmtNode(name, expr, new position(ctx));
+@Override public ASTNode visitIfStmt(YxParser.IfStmtContext ctx) {
+    // 访问并构建trueStmt对应的子树
+    StmtNode thenStmt = (StmtNode)visit(ctx.trueStmt), elseStmt = null;
+    // 访问并构建expression对应的子树
+    ExprNode condition = (ExprNode)visit(ctx.expression());
+    // 如果存在else，那么构建对应falseStmt对应的子树
+    if (ctx.falseStmt != null) elseStmt = (StmtNode)visit(ctx.falseStmt);
+    // 将构建得到的多个子树根节点串接起来，并返回该if语句的根节点
+    // 每个visit函数都会返回以当前为根的子树根节点，由此实现递归的树构建。
+    return new ifStmtNode(condition, thenStmt, elseStmt, new position(ctx));
 }
 \end{lstlisting}
 
