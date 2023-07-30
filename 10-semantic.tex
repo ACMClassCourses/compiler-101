@@ -225,71 +225,71 @@ ANTLR生成的文件中，BaseVisitor提供了可以显式访问parse tree子结
 \section{语义检查}
 进行到这一步，我们已经建好了AST，接下来我们将进行语义检查。
 
-\subsection{符号处理}
-符号(symbol): 在Mx中，符号主要指程序中出现的变量、函数、类等。
+\subsection{符号}
+在一段代码中，我们为了方便阅读，为每个变量、类、函数等都赋予了一个名字（我们又称为标识符）。这些标识符正是编程中的符号的一种具体实例，符号是一种原始数据类型，且具有人类可阅读的形式（human-readable form）。
+每一个符号并不总是全局有效的。比如函数内声明的变量并不能被另外一个函数直接使用。因此，每一个符号在源代码中拥有一段其可见和可访问的区域。对此，作用域的概念被提出用于规定代码中一个特定符号的有效范围。
 
-作用域(scope)：指程序中的某个特定位置或区域中，变量、函数、类等符号的可见性和可访问性范围，即规定了在程序中使用和访问符号的有效范围。
-具体的说明见Mx文档。
+% 符号(symbol): 在Mx中，符号主要指程序中出现的变量、函数、类等。
 
-\subsubsection{作用域构建}
+% 作用域(scope)：指程序中的某个特定位置或区域中，变量、函数、类等符号的可见性和可访问性范围，即规定了在程序中使用和访问符号的有效范围。
+% 具体的说明见Mx文档。
+
+\subsection{作用域构建}
 实现语义检查的过程中，我们需要关注对scope的处理，确保符号在程序中的正确使用。
+根据代码的定义，在一段代码中创建的新作用域默认可以访问更高一层次作用域内的符号。因此，可以采用树的结构来维护符号的有效性信息，根据作用域的关系建树。
+% 在Yx的示例代码中，关于Scope采用了一个类似树的结构来维护，根据作用域的关系建树。
 
-在Yx的示例代码中，关于Scope采用了一个类似树的结构来维护，根据作用域的关系建树。
+以下以Yx代码中Scope类为例。首先，定义一个Scope类，用以储存每个作用域内需要的信息。
+\begin{lstlisting}[language=Java]
+public class Scope {
+    // 用于存储符号和其对应类型信息，编译检查类型错误
+    private HashMap<String, Type> members;
+    public HashMap<String, register> entities = new HashMap<>();
+    private Scope parentScope; // 保存外层作用域，用于回溯
 
-具体的实现思路是：
-
-首先，定义一个Scope类，用以储存每个作用域内需要的信息。
-\begin{lstlisting}
-    public class Scope {
-        private HashMap<String, Type> members;
-        public HashMap<String, register> entities = new HashMap<>();
-        private Scope parentScope; // 保存外层作用域，用于回溯
-
-        public Scope(Scope parentScope) {
-            members = new HashMap<>();
-            this.parentScope = parentScope;
-        }
+    public Scope(Scope parentScope) {
+        members = new HashMap<>();
+        this.parentScope = parentScope;
     }
+}
 \end{lstlisting}
 
-其次，以全局作用域作为根节点。维护一个currentScope表示当前作用域，如果产生了一个新的作用域（比如
+其次，以全局作用域作为根节点。在AST遍历器上维护一个currentScope表示当前作用域，如果产生了一个新的作用域（比如
 在IfStmtNode中，一个if-else语句会产生两个内层的作用域），则新建一个Scope类变量作为新的currentScope，完成
 该内层作用域内的工作后，再将currentScope退回先前的作用域，通过成员变量parentScope记录作用域之间的关系并实现回溯。
 这样，每当我们需要为一个被调用的变量寻找它的定义，我们可以通过parentScope从当前作用域不断向前回溯，直到找到
 这个变量对应的定义。举例如下：
-\begin{lstlisting}
-    public void visit(blockStmtNode it) {
-        if (!it.stmts.isEmpty()) {
-            currentScope = new Scope(currentScope);
-            for (StmtNode stmt : it.stmts) stmt.accept(this);
-            currentScope = currentScope.parentScope();
-        }
+\begin{lstlisting}[language=Java]
+// 访问AST上的blockStmt节点
+public void visit(blockStmtNode it) {
+    if (!it.stmts.isEmpty()) {
+        currentScope = new Scope(currentScope);
+        // 递归访问子树，构建Scope关系
+        for (StmtNode stmt : it.stmts) stmt.accept(this);
+        currentScope = currentScope.parentScope();
     }
+}
 \end{lstlisting}
 
-\subsubsection{全局符号收集}
+\subsection{符号收集}
 在Mx中，全局作用域内的函数和类是支持前向引用（在函数、类定义之前进行调用）的，所以需要先对全局的符号进行收集（这个过程称为 symbol collector），
 并把收集的符号存储在全局作用域(global scope)内。
 
-这里注意，Mx中有一些无需定义的基本类型、内建方法等，在初始化全局作用域时应该先行保存。
-
-如果你对以上内容感到费解，可以阅读Yx的Tutorial.md中的讲解和Yx代码，辅助理解。
+这里注意，Mx中有一些无需定义的基本类型、内建方法等，在初始化全局作用域时应该先行保存。更多细节可以阅读Yx的Tutorial.md中的讲解和Yx代码，辅助理解。
 
 \subsection{语义检查}
-现在我们开始进行语义检查。
+在完成作用域的构建后，我们开始进行语义检查。
 在这一部分，我们需要遍历AST所有的节点，并对每个节点可能出现的错误进行判断。
+这一步在Mx中需要在作用域构建之后完成以支持前向引用。
 
 以下列举一些语义检查过程中需要进行的工作和可能遇到的错误。
 
 \begin{enumerate}
     \item 类型检查：主要检查类型匹配问题，遍历过程中需要进行一定的类型推断。
-    
-    类型推断: 遍历节点过程中，需要通过上下文信息来确定某个表达式的类型。
-    比如a=b+c中，b和c都是int型，则可以推断二元表达式b+c也应为int型。
-
-    类型匹配: 可能的问题有函数调用的参数是否匹配、操作符对应的类型是否匹配、函数返回值的类型是否匹配、右值不能被赋值等等。
+    \item 类型推断: 遍历节点过程中，需要通过上下文信息来确定某个表达式的类型。比如\texttt{a=b+c}中，\texttt{b}和\texttt{c}都是\texttt{int}型，则可以推断二元表达式\texttt{b+c}也应为\texttt{int}型。
+    \item 类型匹配: 可能的问题有函数调用的参数是否匹配、操作符对应的类型是否匹配、函数返回值的类型是否匹配、右值不能被赋值等等。
     \item 作用域: 符号的使用是否正确，有无重名、未定义符号等问题。
-    \item 控制流语句: break和continue的使用
+    \item 控制流: \texttt{break}和\texttt{continue}的使用。
 \end{enumerate}
 
 
