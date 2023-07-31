@@ -75,25 +75,30 @@ RISCV rv32gc clang (trunk)（trunk 这里表示最新的 clang），在编译器
 
 对于使用 pacman 包管理的用户，可以执行 \texttt{sudo pacman -S llvm clang} 安装最新版本的 LLVM。
 
-\textit{注意：如果你用的是特定版本的 LLVM（而非最新版本），在使用程序时，需要加上} \texttt{-<version>} \textit{后缀。比如} \texttt{clang-15 ...} \texttt{。}
-
 你可以执行 \texttt{clang --version} 来检查 clang 是否确实安装到系统中。正常情况下，该指令会显示你的
 clang 版本、目标平台等信息。
 
+\begin{remark}
+如果你用的是特定版本的 LLVM（而非最新版本），在使用程序时，需要加上 \texttt{-<version>} 后缀。比如 \texttt{clang-15 ...}。
+\end{remark}
+
 \section{LLVM 15 语法}\label{LLVM-semantic}
 
-\textit{本章节只介绍常用的 LLVM 15 语法。如需了解全部语法或更详细的 LLVM 语法，请访问
-\url{https://llvm.org/docs/LangRef.html}。}
+\begin{remark}
+本章节只介绍常用的 LLVM 15 语法。如需了解全部语法或更详细的 LLVM 语法，请访问
+\url{https://llvm.org/docs/LangRef.html}。
+\end{remark}
 
-\textit{提示：你可以先大致了解 LLVM 15 语法，然后跳到「从抽象语法树到中间语言」章节
+\begin{remark}
+你可以先大致了解 LLVM 15 语法，然后跳到「从抽象语法树到中间语言」章节
 (\ref{AST-to-IR}) 了解如何完成抽象语法树到 IR
 的转换。在阅读「从抽象语法树到中间语言」部分的过程中，如果对 LLVM IR
-的语法有疑惑，再回到本部分查看详细信息。}
+的语法有疑惑，再回到本部分查看详细信息。
+\end{remark}
 
 \subsection{LLVM 15 简单例子}
 
 对于下面的代码，
-
 \begin{lstlisting}[language=C]
 int c;
 int foo(int* a, int b) {
@@ -215,7 +220,9 @@ LLVM 15 的基本语法包含
   \item 空指针常量：仅支持字符串 \texttt{null}，类型为 \texttt{ptr}。
 \end{itemize}
 
-\textit{如需使用其他常量，请参见\href{https://llvm.org/docs/LangRef.html\#constants}{官方文档}。}
+\begin{remark}
+如需使用其他常量，请参见\href{https://llvm.org/docs/LangRef.html\#constants}{官方文档}。
+\end{remark}
 
 \subsection{函数定义及声明}\label{LLVM-functions}
 
@@ -246,13 +253,17 @@ declare <ResultType> @<FunctionName>(...)
 声明的形式基本上和定义一致，只不过去掉了函数体，前面的 \texttt{define} 被换成了
 \texttt{declare}。
 
-\textit{关于函数调用，请参见 call 指令 (\ref{LLVM-call-instructions})。}
+\begin{remark}
+关于函数调用，请参见 call 指令 (\ref{LLVM-call-instructions})。
+\end{remark}
 
 \subsection{指令}\label{LLVM-instructions}
 
-\textit{注：以下的介绍中的语法只是 LLVM IR 语法的一部分。关于全部语法，请访问
+\begin{remark}
+以下的介绍中的语法只是 LLVM IR 语法的一部分。关于全部语法，请访问
 \url{https://llvm.org/docs/LangRef.html\#instruction-reference}。
-同时，每个指令的章节也会附上对应的官方文档链接。}
+同时，每个指令的章节也会附上对应的官方文档链接。
+\end{remark}
 
 在 LLVM IR 中，我们一般会用到以下指令：（点击括号中的章节号可以跳转到对应章节）
 
@@ -292,7 +303,9 @@ declare <ResultType> @<FunctionName>(...)
 
 \subsubsection{二元运算指令}\label{LLVM-binary-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#binary-operations}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#binary-operations}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -322,7 +335,9 @@ declare <ResultType> @<FunctionName>(...)
 
 \subsubsection{\texttt{br} 指令}\label{LLVM-br-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#br-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#br-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -350,7 +365,9 @@ br label %label_3 ; Unconditional branch
 
 \subsubsection{\texttt{ret} 指令}\label{LLVM-ret-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#ret-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#ret-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -374,7 +391,9 @@ ret i32 1
 
 \subsubsection{\texttt{alloca} 指令}\label{LLVM-alloca-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#alloca-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#alloca-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -398,7 +417,9 @@ ret i32 1
 
 \subsubsection{\texttt{load} 指令}\label{LLVM-load-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#load-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#load-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -422,7 +443,9 @@ store i32 3, ptr %ptr
 
 \subsubsection{\texttt{store} 指令}\label{LLVM-store-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#store-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#store-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -445,7 +468,9 @@ store i32 3, ptr %ptr
 
 \subsubsection{\texttt{getelementptr} 指令}\label{LLVM-gep-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#getelementptr-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#getelementptr-instruction}。
+\end{remark}
 
 在编译器大作业中，以下的语法可以胜任全部要求：
 \begin{lstlisting}[language=llvm]
@@ -511,7 +536,9 @@ entry:
 
 \subsubsection{\texttt{icmp} 指令}\label{LLVM-icmp-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#icmp-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#icmp-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -545,7 +572,9 @@ entry:
 
 \subsubsection{\texttt{call} 指令}\label{LLVM-call-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#call-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#call-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -567,7 +596,9 @@ call void @foo2(i8 97)
 
 \subsubsection{\texttt{phi} 指令}\label{LLVM-phi-instructions}
 
-\textit{完整文档位于 \url{https://llvm.org/docs/LangRef.html\#phi-instruction}}。
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#phi-instruction}。
+\end{remark}
 
 语法：
 \begin{lstlisting}[language=llvm]
@@ -614,7 +645,7 @@ LLVM IR 的文字形式对应的节点。节点的设计因人而异，但是整
 \texttt{br} 或 \texttt{ret} 指令，每个指令节点都记录了里面需要用到的变量和类型。此外，建议保留转换到
 LLVM IR 字符形式的接口，以便调试和测试。
 
-\textit{注意：
+\begin{remark}
 \begin{enumerate}
   \item 如果你在线上平台选择的语言为 C++，那么你会发现函数名和原来的函数名不一样
     （一般会有一个下划线前缀和一个与函数参数相关的类型），这是由于
@@ -626,7 +657,7 @@ LLVM IR 字符形式的接口，以便调试和测试。
     位的，因此如果你想要在自己的电脑上运行 IR，你需要加上 \texttt{-m32} 参数（如果你的电脑兼容
     32 位指令集）或使用模拟器（如 qemu）。
 \end{enumerate}
-}
+\end{remark}
 
 \subsection{转换方式概览}\label{AST-to-IR-details}
 
@@ -923,8 +954,10 @@ IR，需要将换行符 \texttt{'\textbackslash{}n'} 转换成 \texttt{'\textbac
 IR。在本章节中，我们会介绍如何将之前生成的 IR 转化为 RV32IMA 汇编。
 我们编译器的测试用的模拟器是 ravel，仓库位于 \url{https://github.com/Engineev/ravel}。
 
-\textit{本章中，你可以使用 llc 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是}
-\texttt{llc --march=riscv32 <src.ll>}\textit{。}
+\begin{remark}
+本章中，你可以使用 llc 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是
+\texttt{llc --march=riscv32 <src.ll>}。
+\end{remark}
 
 \subsection{转换方式概览}
 
