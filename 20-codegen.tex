@@ -75,6 +75,8 @@ RISCV rv32gc clang (trunk)（trunk 这里表示最新的 clang），在编译器
 
 对于使用 pacman 包管理的用户，可以执行 \texttt{sudo pacman -S llvm clang} 安装最新版本的 LLVM。
 
+\textit{注意：如果你用的是特定版本的 LLVM（而非最新版本），在使用程序时，需要加上} \texttt{-<version>} \textit{后缀。比如} \texttt{clang-15 ...} \texttt{。}
+
 你可以执行 \texttt{clang --version} 来检查 clang 是否确实安装到系统中。正常情况下，该指令会显示你的
 clang 版本、目标平台等信息。
 
