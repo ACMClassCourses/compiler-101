@@ -1,5 +1,5 @@
 all:
 	xelatex main.tex
-	bibtex main
+	biber main
 	xelatex main.tex
 	xelatex main.tex
