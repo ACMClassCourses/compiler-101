@@ -6,12 +6,13 @@ TEX_FILES = \
 	30-optimize.tex \
 	appendix.tex
 CLASS_FILES = elegantbook.cls
+BIB_FILES = reference.bib
 IMAGES = image/g4.png image/godbolt.png figure/cover.jpg
 
 .PHONY: all
 all: main.pdf
 
-main.pdf: $(TEX_FILES) $(CLASS_FILES) $(IMAGES)
+main.pdf: $(TEX_FILES) $(CLASS_FILES) $(IMAGES) $(BIB_FILES)
 	xelatex $<
 	biber main
 	xelatex $<

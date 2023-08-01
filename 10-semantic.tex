@@ -8,7 +8,7 @@
 % \noindent
 % (先写一点备注) \\
 % 1. 强烈建议认真阅读Yx的代码和Tutorial.md。 \\
-% Yx是一个比Mx更加简单的语法，阅读Yx的实现对于代码的完成非常有帮助。\\
+% Yx是一个比Mx*更加简单的语法，阅读Yx的实现对于代码的完成非常有帮助。\\
 % Yx的github地址：https://github.com/ZYHowell/Yx \\
 % 2. 一些建议：多和同学、助教交流；没有头绪时多看看Yx和学长学姐的代码，有助于理解并提高效率；
 % 切忌抄袭。\\
@@ -42,8 +42,8 @@ parser 和 lexer，并构建一棵语法树。ANTLR 为这棵语法树提供了 
     \item 遍历语法树或抽象语法树对源代码进行语法检查。
 \end{enumerate}
 
-% 一份Mx代码将被转换成一棵AST，这棵树从RootNode开始，随着树的层数的加深，
-% 每层的结点所表示的单位逐渐变小。下面是基于Mx的一个AST层级的简单示意：
+% 一份Mx*代码将被转换成一棵AST，这棵树从RootNode开始，随着树的层数的加深，
+% 每层的结点所表示的单位逐渐变小。下面是基于Mx*的一个AST层级的简单示意：
 % \begin{lstlisting}
 % RootNode 
 % - VariableDef
@@ -53,13 +53,13 @@ parser 和 lexer，并构建一棵语法树。ANTLR 为这棵语法树提供了 
 % - FunctionDefinition - Statements - Expressions 
 % \end{lstlisting}
 
-% Mx语言下，对这个结构进行一点简单的注解：\\
-% 1. RootNode从全局作用域开始。Mx的全局作用域中只存在全局变量、类定义、全局函数三种类型。\\
+% Mx*语言下，对这个结构进行一点简单的注解：\\
+% 1. RootNode从全局作用域开始。Mx*的全局作用域中只存在全局变量、类定义、全局函数三种类型。\\
 % 2. 类定义中，只存在变量和函数。 \\
 % 3. 一个函数包含多个statement(语句)。在AST中，一个函数中的每个statement都是这个函数节点的子节点。
 % statement有许多种类型，比如if语句、循环语句(for、while)等等。\\
 % 4. expression(表达式)有许多种类型，比如基本表达式(primary)、常量表达式(constant)、赋值表达式(assignment)等等。 \\
-% 5. 关于Mx所使用的statement和expression，Mx文档中均有明确的规定，概念模糊的同学可以先仔细阅读。 \\
+% 5. 关于Mx*所使用的statement和expression，Mx*文档中均有明确的规定，概念模糊的同学可以先仔细阅读。 \\
 
 % 如果你对以上结构感到费解，可以仔细阅读Yx库中的g4文件(Yx/src/parser/Yx.g4)辅助理解，或者继续阅读下一部分中对于如何构建AST的详细介绍，
 % 准确地理解AST的结构将会大大提高效率。\\
@@ -69,7 +69,7 @@ parser 和 lexer，并构建一棵语法树。ANTLR 为这棵语法树提供了 
 
 \section{语法分析}
 \subsection{语法描述文件}
-我们采用 ANTLR 构建语法树，我们需要先写一个 Mx.g4 文件，用来描述 Mx 的语法。在这里我们以 Yx-Compiler\cite{Yx}
+我们采用 ANTLR 构建语法树，我们需要先写一个 Mx*.g4 文件，用来描述 Mx* 的语法。在这里我们以 Yx-Compiler\cite{Yx}
 为例子讲述如何撰写一个 ANTLR 下的语法描述文件。
 
 首先我们需要定义词法，以下的代码将 \texttt{int} 字符串识别为 \texttt{Int}，
@@ -93,12 +93,12 @@ Identifier : [a-zA-Z] [a-zA-Z_0-9]*;
 一个函数包含多个 statement (语句)，statement 有许多种类型，比如 if 语句、循环语句 (for、while) 等等。
 注意，书写这部分之前，需要先对抽象语法树上可能存在的节点有个大致的规划。一般地，我们会设计 \texttt{Statement}
 抽象类和 \texttt{Expression} 抽象类。
-所有具体的语句都继承 Statement，各种具体的表达式都继承 Expression。
+所有具体的语句都继承 \texttt{Statement}，各种具体的表达式都继承 \texttt{Expression}。
 而针对具体的语句，需要根据语法定义要求规划节点类型。
-例如，对if语句 (IfStmt) 节点，需要包括一个表达式节点 (ExpressionNode) 表达条件，两个语句
-(Statements) 分别代表条件为真 (True Statement) 或假 (False Statement) 的语句。
+例如，对if语句 (\texttt{IfStmt}) 节点，需要包括一个表达式节点 (\texttt{ExpressionNode})
+表达条件，两个语句 (statements) 分别代表条件为真 (True Statement) 或假 (False Statement) 的语句。
 
-以 Yx 的 Statement 部分为例：
+以 Yx 的 \texttt{Statement} 部分为例：
 \begin{lstlisting}
 statement
     : suite                                                 #block
@@ -119,8 +119,8 @@ statement 将会被分别解析为 \texttt{trueStmt} 和\texttt{falseStmt}。
 
 当你完成词法和语法对应规则的书写之后，语法描述文件的实现完成。以下是一些小贴士：
 \begin{enumerate}
-    \item 对于 Mx，如果觉得 Lexer 和 Parser 置于同一文件中过于复杂，可以考虑分为两个文件(MxLexer.g4, MxParser.g4)来书写。
-    \item 如果你使用 IDEA，可以基于你写的 g4 文件，输入一段 Mx 代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
+    \item 对于 Mx*，如果觉得 Lexer 和 Parser 置于同一文件中过于复杂，可以考虑分为两个文件(Mx*Lexer.g4, Mx*Parser.g4)来书写。
+    \item 如果你使用 IDEA，可以基于你写的 g4 文件，输入一段 Mx* 代码，可视化地生成解析树。效果大致如下，具体方法可自行查阅。
     \item antlr4 的其他详细内容，请参照《antlr4 权威指南》。
 \end{enumerate}
 
@@ -158,11 +158,11 @@ ParseTree parseTreeRoot = parser.program();
     ANTLR 在 lexer 和 parser 的过程中，能够发现词法、语法错误，而具体的异常类可以自定义。\textbf{并不是所有 ANTLR 抛出的错误都是需要处理的错误。}具体请参考 Yx 对于 \texttt{YxErrorListener} 类的处理。
 \end{remark}
 
-\subsection{AST节点}
+\subsection{AST 节点}
 现在，我们可以通过变量 \texttt{parseTreeRoot} 得到语法树的根节点，并建一棵 AST。
 那么首先，我们需要为每一个节点定义一个类，来保存各自需要的信息，从而构成一棵树。
 这里的树形结构和 g4 的语法结构本质上是一致的。
-以下是 Yx 给出的 ifStmtNode 类的定义作为例子：
+以下是 Yx 给出的 \texttt{ifStmtNode} 类的定义作为例子：
 \begin{lstlisting}[language=Java]
 abstract public class ASTNode {
     public position pos; // 用于存储节点所指代的对源代码范围
@@ -199,8 +199,8 @@ public class ifStmtNode extends StmtNode {
 \end{lstlisting}
 
 需要注意的是，在定义 AST 节点的过程中，对于表达式节点 (\texttt{ExprNode})，我们还需要关注它的类型。在
-Mx 语言中，允许出现的类型除了 Mx 文档提到的 \texttt{int}, \texttt{bool} 等基础类型外，
-还会出现 Mx 代码中自定义的类，所以我们需要建立一个内部的类型系统来管理各种类型。
+Mx* 语言中，允许出现的类型除了 Mx* 文档提到的 \texttt{int}, \texttt{bool} 等基础类型外，
+还会出现 Mx* 代码中自定义的类，所以我们需要建立一个内部的类型系统来管理各种类型。
 表现在具体的代码中，即 \texttt{ExprNode} 类中会含有一个 \texttt{Type}
 型的成员变量，用来表示这个表达式对应的类型。（如下所示）
 \begin{lstlisting}[language=Java]
@@ -217,7 +217,7 @@ public abstract class ExprNode extends ASTNode {
 
 \subsection{构建具象语法树 (Abastract Syntax Tree, AST)}
 ANTLR 生成的文件中，\texttt{BaseVisitor} 提供了可以显式访问 parse tree 子结点的接口，所以
-\texttt{ASTBuilder} 类将继承 \texttt{MxBaseVisitor} 类，然后访问 parse tree 的各个节点，
+\texttt{ASTBuilder} 类将继承 \texttt{Mx*BaseVisitor} 类，然后访问 parse tree 的各个节点，
 将需要的信息依次读入自定义的各种 \texttt{ASTNode} 类中，构建自己的 AST 树。构建 AST 的过程是一个递归的过程。
 
 在这里，我们仍然以 if 语句为例子，在语法描述文件中，我们定义 if 语句的方式是 \texttt{If '(' expression ')' trueStmt=statement (Else falseStmt=statement)?}。
@@ -247,10 +247,10 @@ ANTLR 生成的文件中，\texttt{BaseVisitor} 提供了可以显式访问 pars
 每一个符号并不总是全局有效的。比如函数内声明的变量并不能被另外一个函数直接使用。
 因此，每一个符号在源代码中拥有一段其可见和可访问的区域。对此，作用域的概念被提出用于规定代码中一个特定符号的有效范围。
 
-% 符号(symbol): 在Mx中，符号主要指程序中出现的变量、函数、类等。
+% 符号(symbol): 在Mx*中，符号主要指程序中出现的变量、函数、类等。
 
 % 作用域(scope)：指程序中的某个特定位置或区域中，变量、函数、类等符号的可见性和可访问性范围，即规定了在程序中使用和访问符号的有效范围。
-% 具体的说明见Mx文档。
+% 具体的说明见Mx*文档。
 
 \subsection{作用域构建}
 实现语义检查的过程中，我们需要关注对作用域 (scope) 的处理，确保符号在程序中的正确使用。
@@ -258,7 +258,7 @@ ANTLR 生成的文件中，\texttt{BaseVisitor} 提供了可以显式访问 pars
 因此，可以采用树的结构来维护符号的有效性信息，根据作用域的关系建树。
 % 在Yx的示例代码中，关于Scope采用了一个类似树的结构来维护，根据作用域的关系建树。
 
-以下以 Yx 代码中 Scope 类为例。首先，定义一个 Scope 类，用以储存每个作用域内需要的信息。
+以下以 Yx 代码中 \texttt{Scope} 类为例。首先，定义一个 \texttt{Scope} 类，用以储存每个作用域内需要的信息。
 \begin{lstlisting}[language=Java]
 public class Scope {
     // 用于存储符号和其对应类型信息，编译检查类型错误
@@ -293,15 +293,15 @@ public void visit(blockStmtNode it) {
 \end{lstlisting}
 
 \subsection{符号收集}
-在 Mx 中，全局作用域内的函数和类是支持前向引用（在函数、类定义之前进行调用）的，所以需要先对全局的符号进行收集（这个过程称为 symbol collection），
+在 Mx* 中，全局作用域内的函数和类是支持前向引用（在函数、类定义之前进行调用）的，所以需要先对全局的符号进行收集（这个过程称为 symbol collection），
 并把收集的符号存储在全局作用域 (global scope) 内。
 
-这里注意，Mx 中有一些无需定义的基本类型、内建方法等，在初始化全局作用域时应该先行保存。更多细节可以阅读 Yx 的 Tutorial.md 中的讲解和 Yx 代码，辅助理解。
+这里注意，Mx* 中有一些无需定义的基本类型、内建方法等，在初始化全局作用域时应该先行保存。更多细节可以阅读 Yx 的 Tutorial.md 中的讲解和 Yx 代码，辅助理解。
 
 \subsection{语义检查}
 在完成作用域的构建后，我们开始进行语义检查。
 在这一部分，我们需要遍历 AST 所有的节点，并对每个节点可能出现的错误进行判断。
-这一步在 Mx 中需要在作用域构建之后完成以支持前向引用。
+这一步在 Mx* 中需要在作用域构建之后完成以支持前向引用。
 
 以下列举一些语义检查过程中需要进行的工作和可能遇到的错误。
 
@@ -315,6 +315,6 @@ public void visit(blockStmtNode it) {
 \end{enumerate}
 
 
-Mx 涉及的语义错误在 Mx 文档中有详细的描述，这部分的代码相当琐碎，书写和 debug 过程中请保持耐心和细心。
+Mx* 涉及的语义错误在 Mx* 文档中有详细的描述，这部分的代码相当琐碎，书写和 debug 过程中请保持耐心和细心。
 具体代码可以参考 Yx 和他人的代码。
 
