@@ -30,15 +30,15 @@
 语法检查阶段的难点都与抽象语法树 (Abstract Syntax Tree, AST)
 有关，分别是如何构建 AST 以及如何在 AST 上遍历进行语法检查。
 两个步骤的难点主要在工程实现。ANTLR 能够将我们编写的语法规则（g4 文件）生成对应的
-parser 和 lexer，并构建一棵语法树。ANTLR 为这棵语法树提供了 Listener 和 Visitor
-的借口，便于我们提取其中的信息，我们希望能够自定义树的每个结点，并储存需要的信息。
-因此，我们将继承 ANTLR 生成的 Listener 或 Visitor，通过遍历具象语法树构建一棵抽象语法树。
+parser 和 lexer，并构建一棵语法树。ANTLR 为这棵语法树提供了 listener 和 visitor
+的接口，便于我们提取其中的信息，我们希望能够自定义树的每个结点，并储存需要的信息。
+因此，我们将继承 ANTLR 生成的 listener 或 visitor，通过遍历具象语法树构建一棵抽象语法树。
 最后，在抽象语法树上进行遍历，对源代码的语法进行检查。
 
 分步骤来看，这个阶段你需要完成的任务有：
 \begin{enumerate}
     \item 为语言编写文法分析文件（g4 文件）；
-    \item 继承 ANTLR 生成的 Visitor 或 Listener 实现对 ANTLR 的语法树遍历，并同时构建抽象语法树（可选）；
+    \item 继承 ANTLR 生成的 visitor 或 listener 实现对 ANTLR 的语法树遍历，并同时构建抽象语法树（可选）；
     \item 遍历语法树或抽象语法树对源代码进行语法检查。
 \end{enumerate}
 
@@ -215,7 +215,7 @@ public abstract class ExprNode extends ASTNode {
 （比如如何表示自定义类、如何处理数组问题等等），\texttt{Type} 类的实现可以参考 Yx 以及他人的代码。
 
 
-\subsection{构建具象语法树 (Abastract Syntax Tree, AST)}
+\subsection{构建抽象语法树 (Abstract Syntax Tree, AST)}
 ANTLR 生成的文件中，\texttt{BaseVisitor} 提供了可以显式访问 parse tree 子结点的接口，所以
 \texttt{ASTBuilder} 类将继承 \texttt{Mx*BaseVisitor} 类，然后访问 parse tree 的各个节点，
 将需要的信息依次读入自定义的各种 \texttt{ASTNode} 类中，构建自己的 AST 树。构建 AST 的过程是一个递归的过程。
