@@ -13,10 +13,10 @@ IMAGES = image/g4.png image/godbolt.png figure/cover.jpg
 all: main.pdf
 
 main.pdf: $(TEX_FILES) $(CLASS_FILES) $(IMAGES) $(BIB_FILES)
-	xelatex $<
-	biber main
-	xelatex $<
-	xelatex $<
+	xelatex $< || (make clean && exit 1)
+	biber main || (make clean && exit 1)
+	xelatex $< || (make clean && exit 1)
+	xelatex $< || (make clean && exit 1)
 
 .PHONY: clean
 clean:
