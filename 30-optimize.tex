@@ -36,11 +36,11 @@
 \section{基本块划分}
 
 我们日常写的程序通常有着较为复杂的逻辑，包括分支、循环等结构。
-如果我们以一条指令为单位，控制流将变得非常复杂，因此我们提出基本块 (Basic Block) 的概念。
+如果我们以一条指令为单位，控制流将变得非常复杂，因此我们提出\textbf{基本块 (Basic Block)} 的概念。
 一个基本块由前驱、后继和一串顺序执行的指令（即这串指令中不存在任何跳转指令）组成。
 所有的跳转逻辑，通过维护基本块之间的前驱、后继关系来保证。
 通过基本块的划分，目标程序自然地被表示成一张有向图，图的节点就是这些基本块，边表示了他们之间的跳转关系。
-上面提到的由以基本块为节点的有向图，被称作控制流图 (Control Flow Graph, CFG)。
+上面提到的由以基本块为节点的有向图，被称作\textbf{控制流图 (Control Flow Graph, CFG)}。
 下面提到的活跃分析，将在控制流图的基础上进行。
 
 \section{活跃分析}
@@ -56,49 +56,44 @@
 以下是活跃分析中的一些概念定义：
 
 \begin{description}
-    \item[def 和 use]：def 是在一条指令中被赋值，即被定义的变量；use 指在这条指令中被使用的变量。
+    \item[def 和 use:]def 是在一条指令中被赋值，即被定义的变量；use 指在这条指令中被使用的变量。
 例如：在以下语句中，\texttt{a} 是 def，\texttt{b} 和 \texttt{c} 是 use。
 \begin{lstlisting}[language=c]
     a = b + c
 \end{lstlisting}
 
-当然为了方便，我们可以定义一个基本块的 def 和 use，即这个基本块中所有指令的 def 和 use 的并集。
-本文中默认对基本块做活跃分析。
-所以我们默认之后提到的 def 和 use 都是指一个块的 def 和 use。
+首先为了简单起见，我们先假设每个基本块只包含一条指令。后面我们会介绍包含多条指令的基本块的等效 use 和 def。
 
-\item[活跃]: 表示这个变量的值将来还要继续使用。一个变量在一条边上活跃，
-指存在一条从这条边通向它的一个 use 且不经过任何它的 def 的有向路径。（即保持当前的值直到被下一次使用）
+\item[活跃:] 表示这个变量的值将来还要继续使用。一个变量在一条边上活跃，
+  指存在一条从这条边通向它的一个 use 且不经过任何它的 def 的有向路径（即保持当前的值直到被下一次使用）。
 
-\item[入口活跃]:一个变量在一个块中是入口活跃的当且仅当这个变量在当前块节点的所有入边都活跃。
+\item[入口活跃:] 一个变量在一个块中是入口活跃的，当且仅当这个变量在当前块节点的任意一条入边是活跃的。
+  注意，根据活跃的定义，这等价于这个变量在当前块节点的所有入边都是活跃的。
 
-\item[出口活跃]:一个变量在一个块中是出口活跃的当且仅当这个变量在当前块节点的任意一条出边是活跃的。
+\item[出口活跃:] 一个变量在一个块中是出口活跃的，当且仅当这个变量在当前块节点的任意一条出边是活跃的。
 
 \end{description}
 
 \subsection{活跃分析的算法}
 
 变量（当然你可以称之为虚拟寄存器）在每个块中的活跃状态可由它们的 def 和 use 算出。对每个节点 $n$ 都有:
+\begin{align*}
+\mathit{in}[n]  &= \mathit{use}[n] \cup (\mathit{out}[n] - \mathit{def}[n]), \\
+\mathit{out}[n] &= \bigcup_{s \in \mathit{suc}[n]} \mathit{in}[s].
+\end{align*}
+当然，还有边界条件：
 $$
-in[n] = use[n] \cup (out[n] - def[n])
+\mathit{out}[\mathit{exit}] = \emptyset
 $$
-$$
-out[n] = \cap_{s \in suc[n]} in[s]
-$$
-
-当然还有边界条件：
-$$
-out[exit] = \emptyset
-$$
+上面的式子被称为\textbf{活跃分析的数据流方程}。
 
 \begin{itemize}
-\item $use[n]$ 一定都属于 $in[n]$，因为当前块所有入边都直接指向了这些 use，
-所以这些 use 一定是入口活跃的。
+\item $\mathit{use}[n]$ 一定都属于 $\mathit{in}[n]$，因为这些 use 在当前块的所有入边都活跃。
 
-\item 对于 $out[n]$ 中的变量，如果它在这个块中没有被 def 过，则它一定在 $in[n]$ 中。
+\item 对于 $\mathit{out}[n]$ 中的变量，如果它在这个块中没有被 def 过，则它一定在 $\mathit{in}[n]$ 中。
 这是因为如果此节点的一条出边是活跃的，则它一定通过这条出边指向了一个它的 use 且不经过任何 def。
 那么在这条路径前面再任意加一条当前块的入边，它仍然是一个指向该变量的 use 且不经过任何
 def（这个块中没有 def），那么这条入边肯定也是活跃的。
-故而它在所有入边都是活跃的，即它在当前块中是入口活跃的。
 
 \item 如果一个变量在当前块的某个后继中是入口活跃的，则它在当前块中一定是出口活跃的。
 因为它在当前块的该后继的所有入边都活跃，则在当前块连着这个后继的那条边上，它一定是活跃的。
@@ -109,6 +104,29 @@ def（这个块中没有 def），那么这条入边肯定也是活跃的。
 具体地，我们的算法可以通过不动点迭代的方式进行。一般来说，是从出口开始倒序地 BFS 遍历控制流图，
 因为出口处的边界条件是确定的。
 对所有的基本块都可以进行如上的迭代，直到收敛（一次完整迭代前后没有变动）为止。
+
+\subsection{基本块的等效 use/def}
+
+前面假设了一个基本块只包含一条指令。现在我们从活跃分析的流方程出发，来推导包含多条指令的基本块的等效 use/def。
+
+包含多条指令的基本块可以视为由两个更小的基本块合并而成。
+因此，我们只考虑两个基本块的合并。设这两个基本块为 $p \to n$，
+$p$ 只有一个后继 $n$，$n$ 只有一个前驱 $p$。记合并后的基本块为 $pn$。
+于是我们有 $\mathit{out}[p] = \mathit{in}[n]$。进而有：
+\begin{align*}
+  \mathit{in}[pn] &= \mathit{in}[p] = \mathit{use}[p] \cup (\mathit{out}[p] - \mathit{def}[p]) \\
+  &= \mathit{use}[p] \cup (\mathit{in}[n] - \mathit{def}[p]) \\
+  &= \mathit{use}[p] \cup \left(\mathit{use}[n] \cup (\mathit{out}[n] - \mathit{def}[n]) - \mathit{def}[p]\right) \\
+  &= \mathit{use}[p] \cup (\mathit{use}[n] - \mathit{def}[p]) \cup (\mathit{out}[n] - \mathit{def}[n] - \mathit{def}[p]) \\
+  &= \left(\mathit{use}[p] \cup (\mathit{use}[n] - \mathit{def}[p])\right) \cup \left(\mathit{out}[pn]
+   - (\mathit{def}[n] \cup \mathit{def}[p])\right).
+\end{align*}
+
+所以我们可以把 $\mathit{use}[p] \cup (\mathit{use}[n] - \mathit{def}[p])$ 视为 $pn$ 的等效 use，
+把 $\mathit{def}[n] \cup \mathit{def}[p]$ 视为 $pn$ 的等效 def。
+
+以基本块为单位进行迭代法，可以提高算法的效率。因为如果不合并，那每次迭代过程中基本块内部的 in/out 都会再算一遍。
+另一方面，得到基本块的等效 in/out 后，我们很容易根据流方程得到内部每条指令的 in/out。
 
 \section{Mem2Reg 优化}\label{mem2reg}
 
@@ -236,7 +254,7 @@ if.end:                                           ; preds = %if.else, %if.then
     如果每一条从流图的入口结点到结点 $n$ 的路径都经过结点 $d$, 我们就说 $d$ 支配 $n$，记为 $d$ dom $n$。
     请注意，在这个定义下每个结点都支配它自己。
     \item[支配集]
-    结点 $n$ 的支配集合是所有支配 $n$ 的结点的集合，记为 $Dom(n)$。
+    结点 $n$ 的支配集合是所有支配 $n$ 的结点的集合，记为 $\mathit{Dom}(n)$。
     \item[严格支配 (Strictly Dominate)]
     $n$ 严格支配 $d$ 当且仅当 $d$ 支配 $n$ 且 $n\neq d$, 记作 $d$ sdom $n$。
        
@@ -264,15 +282,17 @@ use 的路径都必然经过这一个 def，即这个 def 支配了所有的 use
 构建支配树并计算支配关系的算法有很多，这里介绍一种性能相对一般的算法，你可以考虑实现其他算法如 Lengauer-Tarjan
 算法。
 
-首先我们有：$DOM(n)={n}\cup(\bigcap_{m\in preds(n)}DOM(m))$。即：一个节点的支配集等于其所有前驱节点支配集的共同前缀再并上自身。
+首先我们有：$\mathit{Dom}(n) = \{n\} \bigcup \left(\bigcap_{m\in \mathit{preds}(n)} \mathit{Dom}(m)\right)$。
+即：一个节点的支配集等于其所有前驱节点支配集的共同前缀再并上自身。
 这是显而易见的，因为节点 a 支配 b 就意味着 a 支配 b 的所有前驱节点。
 
 我们可以通过对每个节点的迭代来计算支配集，即先假设所有节点的支配集都是节点全集，然后不断迭代直到收敛。
-具体地，你可以在迭代的每一步都运行一遍 $DOM(n)\leftarrow{n}\cup(\bigcap_{m\in preds(n)}DOM(m))$,
-直到一遍下来所有 $DOM(n)$ 不 change 了为止。
+具体地，你可以在迭代的每一步都运行一遍 $\mathit{Dom}(n) \leftarrow \{n\} \bigcup
+\left(\bigcap_{m\in \mathit{preds}(n)} \mathit{Dom}(m)\right)$,
+直到一遍下来所有 $\mathit{Dom}(n)$ 不发生变化为止。
 由于控制流图是前向传播的，所以这里迭代的顺序一般采用 RPO (Reverse Post Order)。
 
-这样我们就获得了所有的 $DOM(n)$, 也就是获得了所有节点的支配关系。
+这样我们就获得了所有的 $\mathit{Dom}(n)$, 也就是获得了所有节点的支配关系。
 
 \subsubsection{\texttt{phi} 指令放置算法}
 
@@ -333,7 +353,7 @@ use 的路径都必然经过这一个 def，即这个 def 支配了所有的 use
 我们看到BB1有两个后继，BB3 有两个前驱。假设 BB3 都有 \texttt{phi} 指令，则它们都会往
 BB1 插入拷贝，这就会导致该变量在 BB1 上被修改，从而影响到 BB2 所在的分支进而引起数据冲突。
 我们发现，BB1-BB3 之间的这条 edge 有这样的特点：出端有多个后继且入端有多个前驱。我们称这样的
-edge 为 critical edge。
+edge 为 \textbf{critical edge}。
 
 所有的 critical edge 都可能会引起上述的数据冲突。
 为了解决 critical edge，我们需要在 critical edge 中间插入一个新的空基本块，即：
@@ -345,8 +365,8 @@ edge 为 critical edge。
             BB3     
 \end{lstlisting}
 
-BB5是我们新插入的块。这样一来，我们就把 critical edge 给消除了。
-BB3中的 \texttt{phi} 指令会往 BB5 和 BB4 中插入拷贝，而 BB2 中的 \texttt{phi} 指令会往
+BB5 是我们新插入的块。这样一来，我们就把 critical edge 给消除了。
+BB3 中的 \texttt{phi} 指令会往 BB5 和 BB4 中插入拷贝，而 BB2 中的 \texttt{phi} 指令会往
 BB1 中插入拷贝，这样就不会有数据冲突了。
 
 \section{寄存器分配：冲突图与图染色算法}
@@ -366,7 +386,7 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
 但是寄存器的数量是有限的（以 K 个为例，下同），所以我们需要一个算法来对冲突图进行染色，
 即将图中的每个节点（变量）染上颜色（分配到寄存器中）。当然大多数情况下，这张图是不能用 K 种颜色染色的，
 则我们希望将尽量少的变量存到内存（栈）中然后再对剩下的图进行染色。把变量存在栈上，
-就意味着它不需要使用任何寄存器资源，即我们可以将它从这张图中删除。这个过程被称为溢出 (spill)。
+就意味着它不需要使用任何寄存器资源，即我们可以将它从这张图中删除。这个过程被称为\textbf{溢出 (spill)}。
 
 \subsection{建图 (Build)}
 
@@ -424,7 +444,7 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
 选择 \texttt{spillWorklist} 中的一个高度数节点进行溢出。
 至于如何选择这一节点，你有很多种估价方式, 比如选择度数最大的，或者选择活跃区间最长的，
 或者选择度数和活跃区间长度的乘积最大的，等等。
-\texttt{spillWorklist}是被筛选出来的度数大于K的节点的集合。
+\texttt{spillWorklist}是被筛选出来的度数大于 K 的节点的集合。
 溢出的节点，我们扔进另一个栈 \texttt{spilledStack} 中，等待分配栈空间给这些变量。
 
 溢出的节点加入简化工作表等待被删除（虽然它并非低度数节点），等到染色时会区分可染色节点和溢出节点。
@@ -472,7 +492,7 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
 \subsection{预着色节点的处理}
 
 有一些临时变量需要被放在给定的寄存器上，比如函数的参数、返回地址等等，这些变量不能随意地分配颜色。
-我们称这些变量是预着色 (precolored) 的。
+我们称这些变量是\textbf{预着色 (precolored)} 的。
 在建图的时候，我们需要把这些变量加入冲突图，但是不能把它们加入工作表中，即它们不能被简化，更不可能被溢出。
 
 因此我们可以默认这些节点的度数为无穷大，这样它们就不会被简化。这样一来我们在简化步骤中只要简化到只剩预着色节点、传送有关节点和高度数节点的图就可以了。
