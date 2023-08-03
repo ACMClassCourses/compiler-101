@@ -397,23 +397,19 @@ ret i32 1
 
 语法：
 \begin{lstlisting}[language=llvm]
-<result> = alloca <type> [, <ty> <NumElements>]
+<result> = alloca <type>
 \end{lstlisting}
 
 \begin{itemize}
-  \item \texttt{result} 的类型是指针类型 (\texttt{ptr})；
-  \item 如果有 \texttt{<ty> <NumElements>}，则表示该指针指向了
-    \texttt{NumElements} 个 \texttt{type} 类型的空间。
+  \item \texttt{alloca} 指令可以在当前函数的栈上为 \texttt{type} 类型分配一块的内存空间；
+  \item \texttt{result} 是指向该空间的指针，类型是指针类型 (\texttt{ptr})。
 \end{itemize}
 
 例子：
 \begin{lstlisting}[language=llvm]
 %ptr_1 = alloca i32
-%ptr_2 = alloca i32, i32 5
 \end{lstlisting}
-
-第 1 行表示获得一块 \texttt{sizeof(i32)} 字节的空间，\texttt{ptr\_1} 指向该空间。第 2
-行表示获得一块 \texttt{sizeof(i32)*5} 字节的空间，\texttt{ptr\_2} 指向该空间。
+表示在当前函数的栈上分配一块 \texttt{sizeof(i32)} 字节的空间，\texttt{ptr\_1} 指向该空间。
 
 \subsubsection{\texttt{load} 指令}\label{LLVM-load-instructions}
 
@@ -427,7 +423,7 @@ ret i32 1
 \end{lstlisting}
 
 \begin{itemize}
-  \item \texttt{result} 的类型是 \texttt{ty})；
+  \item \texttt{result} 的类型是 \texttt{ty}；
   \item \texttt{result} 被赋值为 \texttt{pointer} 所指向的值。
 \end{itemize}
 
