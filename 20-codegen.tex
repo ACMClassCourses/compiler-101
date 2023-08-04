@@ -556,12 +556,12 @@ entry:
       \item \texttt{sle}：有符号小于等于
     \end{itemize}
   \item \texttt{op1} 和 \texttt{op2} 的类型必须为 \texttt{ty}；
-  \item \texttt{result} 的类型为 \texttt{i32}。
+  \item \texttt{result} 的类型为 \texttt{i1}。
 \end{itemize}
 
 例子：
 \begin{lstlisting}[language=llvm]
-<result> = icmp eq i32 4, 5
+%result = icmp eq i32 4, 5
 \end{lstlisting}
 
 该指令的结果为 \texttt{false}。
