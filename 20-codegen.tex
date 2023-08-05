@@ -11,6 +11,11 @@ IR (intermediate representation)。此外，对于后续的优化，也可以在
 本章中，我们以 LLVM Language (version 15) 为例，来展示如何从中间语言转换成目标代码。如需查看
 LLVM 的完整文档，请访问 \url{https://llvm.org/docs/LangRef.html}。
 
+\begin{remark}
+本章涉及程序链接的一部分内容。在阅读本章前，强烈建议先行了解关于链接器 (linker) 的知识
+(维基百科链接：\url{https://en.wikipedia.org/wiki/Linker_(computing)})。
+\end{remark}
+
 \section{LLVM 15 概览}
 
 LLVM 是一套编译器基础设施项目，包含一系列模块化的编译器组件和工具链，用来开发编译器前端和后端。
@@ -657,7 +662,9 @@ LLVM IR 字符形式的接口，以便调试和测试。
     在处理成员函数时仍然要将语言切换到 C++。
   \item 由于现在绝大多数电脑都是 64 位的，而我们的目标平台是 32
     位的，因此如果你想要在自己的电脑上运行 IR，你需要加上 \texttt{-m32} 参数（如果你的电脑兼容
-    32 位指令集）或使用模拟器（如 qemu）。
+    32 位指令集）或使用模拟器（如 qemu）。你可以使用 \texttt{clang test.ll builtin.ll -m32}
+    来编译你的代码。但是请注意，在 64 位系统上，即使执行的是 32 位程序，一些库函数的
+    \texttt{size\_t} 是 64 位的，比如 \texttt{memcpy}，在生成内建函数的 LLVM IR 时需要留意。
 \end{enumerate}
 \end{remark}
 
@@ -938,6 +945,14 @@ loop_end_0:
 
 为内建函数及内建成员方法生成对应的 IR 的最方便的办法是使用 C
 语言编写内建函数和内建成员方法，然后使用 clang 转换，并在用户输入的源代码对应的 IR 中声明对应的函数。
+
+编写内建函数时，我们可以使用一些 ravel 支持的 libc 函数，支持的函数见 ravel 的文档
+(\url{https://github.com/Engineev/ravel/blob/master/doc/support.md#libc-functions})。
+使用这些函数时，只需要在 C 语言编写的内建函数文件开头声明这些函数即可。
+如果你不理解这其中的原理，请自行了解链接器 (linker) 的原理
+(\url{https://en.wikipedia.org/wiki/Linker_(computing)})。特别需要注意的是，不建议
+\texttt{\#include} 头文件，因为这会导致生成的代码非常大。此外，你不用担心在测试时无法正确找到这些函数，
+因为编译器通常都会默认链接 libc。
 
 不过，由于 C 函数名不能包含 \texttt{.}，因此对于内建类的内建成员方法，
 我们可以用下划线或其他可以出现在函数名中的字符代替。比如成员方法 \texttt{string.ord}
