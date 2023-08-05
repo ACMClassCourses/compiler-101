@@ -959,7 +959,29 @@ loop_end_0:
 可以被改名成 \texttt{string\_ord}，然后在生成 IR 之后将
 \texttt{string\_ord} 转换为 \texttt{string.ord}。
 
-具体来说，你可以执行以下指令（假设你编写的 C 语言文件名位 \texttt{builtin.c}，且内建类有
+下面的代码是一种 \texttt{print} 函数对应的实现：
+\begin{lstlisting}[language=C]
+// enable bool type
+#define bool _Bool
+
+// libc function
+int printf(const char *pattern, ...);
+
+void print(char *str) {
+    printf("%s", str);
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item 第一个部分 \texttt{\#define bool \_Bool} 用于启用 \texttt{bool}。（因为 C 里面本没有
+    \texttt{bool}，但绝大多数编译器都有内建类型 \texttt{\_Bool} 作为自己编译器的 \texttt{bool}
+    实现。）
+  \item 第二个部分声明需要用到的 libc 函数。
+  \item 第三个部分是 \texttt{print} 函数的实现。
+\end{itemize}
+
+在编写完内建函数后，你可以执行以下指令以生成对应的 LLVM IR
+（假设你编写的 C 语言文件名位 \texttt{builtin.c}，且内建类有
 \texttt{string} 和 \texttt{array}）
 \begin{lstlisting}[language=sh]
 clang -emit-llvm --target=riscv32-unknown-elf -O2 -fno-builtin-printf -fno-builtin-memcpy \
