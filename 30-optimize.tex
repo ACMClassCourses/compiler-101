@@ -140,7 +140,7 @@ load 和 store 作为 use，那么它就是可以被转成静态单赋值形式 
 由于 Mx* 语言没有取地址之类的指令，所以所有的 \texttt{alloca} 指令理论上都可以被消除。
 
 把 \texttt{alloca} 交由编译器后端来处理是很复杂的。所以我们需要将它们转换成 SSA 形式。
-简单地说，我们得通过插入 \texttt{phi} 函数的形式来表示变量在从不同分支而来的块中被赋值，这样就可以消除
+简单地说，我们需要通过插入 \texttt{phi} 函数的形式来表示变量在从不同分支而来的块中被赋值，这样就可以消除
 \texttt{alloca} 了。
 而如何正确插入 \texttt{phi}函数，我们需要在支配树上做分析，最后再根据我们放置的
 \texttt{phi} 函数来重写 \texttt{load} 与 \texttt{store} 指令。
@@ -270,7 +270,7 @@ if.end:                                           ; preds = %if.else, %if.then
 \end{description}
 
 我们说，在 SSA 形式下，一个 def 一定支配它的 use。因为是 SSA，所以一个变量只会被赋值一次，即只会有一次 def。
-那么从程序上说我们要 use 一个变量，这个变量必然得先被 def。根据支配的定义，入口到每一个
+那么从程序上说我们要 use 一个变量，这个变量必然需要先被 def。根据支配的定义，入口到每一个
 use 的路径都必然经过这一个 def，即这个 def 支配了所有的 use。
 
 由于每个 def 支配对应的 use，所以如果达到了 def 所在 block 的支配边界，
@@ -317,8 +317,9 @@ use 的路径都必然经过这一个 def，即这个 def 支配了所有的 use
 
 \subsection{静态单赋值形式 (SSA) 的消除}
 
-遗憾的是，编译器后端不认识 \texttt{phi} 指令，所以我们须将其消除，用等价的其余指令如 \texttt{move} 来代替。
-一般地，我们在拥有 \texttt{phi} 指令的这个块的前驱块中插入一份拷贝，例如：（BB 表示 \textbf{B}asic \textbf{B}lock）
+经过 mem2reg，我们生成了很多 \texttt{phi}。然而，汇编中没有 \texttt{phi} 指令的直接对应，所以我们须将其消除，
+用等价的其余指令如 \texttt{move} 来代替。一般地，我们在拥有 \texttt{phi} 指令的这个块的前驱块中插入一份拷贝，
+例如：（BB 表示 \textbf{B}asic \textbf{B}lock）
 \begin{lstlisting}
         BB1
         x1 = 0
