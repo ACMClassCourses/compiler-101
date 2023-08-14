@@ -1156,7 +1156,7 @@ a:
 （此处为 \texttt{\%a9}）必须放在栈上传递。对于一个函数调用，我们需要：
 \begin{itemize}
   \item 首先在函数调用前，我们必须将函数参数准备好。对于这个例子，我们需要将
-    \texttt{\%a1}—\texttt{\%a7} 分别存放在 \texttt{a0-7} 里面。
+    \texttt{\%a1}—\texttt{\%a8} 分别存放在 \texttt{a0-7} 里面。
   \item 接着，我们调用函数。在这个例子中，我们可以使用 \texttt{call foo} 来调用
     \texttt{foo} 函数。
   \item 最后，我们需要将 \texttt{a0} 寄存器中的值存入到 \texttt{\%\_call\_result.1}
