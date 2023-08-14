@@ -26,7 +26,7 @@ IR 是区分前后端的标志。语法检查、建构抽象语法树、生成 I
 LLVM 提供的工具链可以检查 IR 问题、运行及调试 IR，因此我们推荐使用 LLVM IR
 作为我们编译器的 IR。
 
-LLVM 项目中有很多非常使用的工具——如 clang、llc、lli 等等。一般来是，最常用的工具是
+LLVM 项目中有很多非常实用的工具——如 clang、llc、lli 等等。一般来是，最常用的工具是
 clang，因为 clang 可以将代码编译到 LLVM IR，也可以将 LLVM 代码编译到目标平台。比如
 \texttt{clang main.c -S -emit-llvm --target=riscv32-unknown-elf -o main.ll}
 可以将 \texttt{main.c} 转换成 LLVM IR 并保存在 \texttt{main.ll} 中；而
