@@ -76,7 +76,8 @@
 
 \subsection{活跃分析的算法}
 
-变量（当然你可以称之为虚拟寄存器）在每个块中的活跃状态可由它们的 def 和 use 算出。对每个节点 $n$ 都有:
+变量（当然你可以称之为虚拟寄存器）在每个块中的活跃状态可由它们的 def 和 use 算出。对每个节点 $n$ 都有：
+（下文中 $\mathit{suc}$ 表示后继节点的集合）
 \begin{align*}
 \mathit{in}[n]  &= \mathit{use}[n] \cup (\mathit{out}[n] - \mathit{def}[n]), \\
 \mathit{out}[n] &= \bigcup_{s \in \mathit{suc}[n]} \mathit{in}[s].
