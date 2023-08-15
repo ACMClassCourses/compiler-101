@@ -172,7 +172,7 @@ return:                       ; preds = %entry, %if.end
 LLVM 15 的基本语法包含
 \begin{itemize}
   \item 类型，如 \texttt{i1}，\texttt{i32}，具体参见章节 \ref{LLVM-types}；
-  \item 变量，如 \texttt{\@a = global i32 0} 以及
+  \item 变量，如 \texttt{@a = global i32 0} 以及
     \texttt{\%a = ...}，具体参见章节 \ref{LLVM-variables}；
   \item 常量，具体参见章节 \ref{LLVM-constants}；
   \item 函数定义及声明，如 \texttt{define i32 \@foo(ptr \%0, i32 \%1) \{...\}}，具体参见章节
@@ -194,7 +194,9 @@ LLVM 15 的基本语法包含
 
 常用的类型有
 \begin{itemize}
-  \item 整数类型：用 \texttt{i<N>} 表示，如 \texttt{i32}，\texttt{i1}；
+  \item 整数类型：用 \texttt{i<N>} 表示，如 \texttt{i32}，\texttt{i1}，
+    注意整型的长度与内存中的对齐没有必然的联系，\texttt{i1} 是 1 bit 长，不代表八个 \texttt{i1}
+    占用 1 byte；
   \item 指针类型：用 \texttt{ptr} 表示；
   \item 数组类型：用 \texttt{[<\# elements> x <elementtype>]} 表示，如
     \texttt{[40 x i32]}。数组类型允许嵌套定义，如
@@ -414,7 +416,7 @@ ret i32 1
 \begin{lstlisting}[language=llvm]
 %ptr_1 = alloca i32
 \end{lstlisting}
-表示在当前函数的栈上分配一块 \texttt{sizeof(i32)} 字节的空间，\texttt{ptr\_1} 指向该空间。
+表示在当前函数的栈上分配一块 \texttt{sizeof(i32)} 字节的空间，\texttt{\%ptr\_1} 指向该空间。
 
 \subsubsection{\texttt{load} 指令}\label{LLVM-load-instructions}
 
@@ -515,7 +517,11 @@ entry:
 即可获得所需的指针。
 
 上面的代码与下面的代码（逐步解引用）等价：
-\begin{lstlisting}[language=llvm]define ptr @foo(ptr %s) {
+\begin{lstlisting}[language=llvm]
+%struct.RT = type { i8, [10 x [20 x i32]], i8 }
+%struct.ST = type { i32, double, %struct.RT }
+
+define ptr @foo(ptr %s) {
   %t1 = getelementptr %struct.ST, ptr %s, i32 1
   %t2 = getelementptr %struct.ST, ptr %t1, i32 0, i32 2
   %t3 = getelementptr %struct.RT, ptr %t2, i32 0, i32 1
@@ -638,7 +644,8 @@ IR 的转换过程的一些小问题——如命名问题 (\ref{AST-to-IR-naming
 
 在转换的过程中，你可以使用线上平台来辅助思考转换的逻辑。关于线上平台，参见章节
 \ref{online-LLVM-env}。如果你不希望出现匿名变量，可以加上
-\texttt{-fno-discard-value-names} 参数。
+\texttt{-fno-discard-value-names} 参数。需要注意的是，
+线上平台可能会为了语言规范而采取更为复杂的实现逻辑，因此线上平台的解决方法未必是最简洁的。
 
 此阶段中，程序的性能不是我们考虑的重点。比起性能，我们更关注程序的正确性。
 你可能会注意到，此阶段的局部变量需要使用 \texttt{alloca}
@@ -654,6 +661,10 @@ LLVM IR 字符形式的接口，以便调试和测试。
 
 \begin{remark}
 \begin{enumerate}
+  \item 线上平台的在处理 \texttt{bool} 时采取了非常复杂的方法，即用 \texttt{i8} 来储存
+    \texttt{bool} 型变量。相较于直接采用 \texttt{i1} 来说，这样的方式更为复杂。用 \texttt{i8}
+    或许是因为 C++ 规范要求的缘故，但 Mx* 不需要考虑这样的要求，因此将 \texttt{bool} 当作
+    \texttt{i1} 是更为推荐的做法。
   \item 如果你在线上平台选择的语言为 C++，那么你会发现函数名和原来的函数名不一样
     （一般会有一个下划线前缀和一个与函数参数相关的类型），这是由于
     C++ 的 name mangling 机制，具体请上网执行了解。Name mangling
@@ -790,7 +801,7 @@ int a;
 \end{lstlisting}
 如果要对 \texttt{a} 赋值，我们可以使用 \texttt{store} 指令。下面的语句表示将 1 赋值给 \texttt{a}
 \begin{lstlisting}[language=LLVM]
-store i32 0, ptr %a
+store i32 1, ptr %a
 \end{lstlisting}
 如果要取 \texttt{a} 的值，我们可以使用 \texttt{load} 指令。下面的语句中 \texttt{\%b}
 表示取 \texttt{a} 的值
@@ -1095,7 +1106,7 @@ a:
     \texttt{.text}、\texttt{.bss}、\texttt{.data}、\texttt{.rodata}
     这几个部分。\texttt{.text} 一般用于存放指令；\texttt{.bss}
     段在初始化过程中会被全部以 0 初始化，一般用于存放一些需要以 0 初始化的可读可写数据，
-    如全局数组；\texttt{.data} 段用于存放指定的可读可写数据，如一些指定初始化值的变量，
+    如全局数组；\texttt{.data} 段用于存放指定的可读可写数据，如一些指定初始化值的变量；
     \texttt{.rodata} 段用于存放只读数据，如字符串字面量。
   \item \texttt{.globl <label>} 允许 label 在全局被访问（其他汇编文件可以使用全局的标签），
     通常用于函数及变量。
