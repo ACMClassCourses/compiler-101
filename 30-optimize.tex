@@ -351,7 +351,7 @@ use 的路径都必然经过这一个 def，即这个 def 支配了所有的 use
     BB2   BB3
 \end{lstlisting}
 
-我们看到BB1有两个后继，BB3 有两个前驱。假设 BB3 都有 \texttt{phi} 指令，则它们都会往
+我们看到BB1有两个后继，BB3 有两个前驱。假设 BB2、BB3 都有 \texttt{phi} 指令，则它们都会往
 BB1 插入拷贝，这就会导致该变量在 BB1 上被修改，从而影响到 BB2 所在的分支进而引起数据冲突。
 我们发现，BB1-BB3 之间的这条 edge 有这样的特点：出端有多个后继且入端有多个前驱。我们称这样的
 edge 为 \textbf{critical edge}。
