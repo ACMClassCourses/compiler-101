@@ -7,7 +7,12 @@
 与传统编译原理课程不同的是，本课程不会提供任何的已有框架。课程设计目标要求自主设计数据结构（自主设计抽象语法树、中间表达，自主探索语言特定的优化策略）。
 
 \begin{remark}
-    在本课程中，允许使用 \texttt{antlr} 等前端分析库，但是不得使用现有的编译库。
+  \begin{enumerate}
+    \item 在本课程中，允许使用 \texttt{antlr} 等前端分析库，但是不得使用现有的编译库。
+    \item 作业仓库：\url{https://github.com/ACMClassCourses/Compiler-Design-Implementation}。其中 testcases 目录下提供了不同阶段的评测点，
+      每个阶段的目录下提供了测试脚本，脚本中的注释提供了用法提示。
+    \item 运行环境（模拟器）：\url{https://github.com/Engineev/ravel}。
+  \end{enumerate}
 \end{remark}
 
 一段程序的执行可以抽象为两个问题，即下一步要执行的指令是哪条以及需要访问的数据资源是哪些。我们将前者抽象为控制流 (Control Flow)，后者抽象为数据流 (Data Flow)。
