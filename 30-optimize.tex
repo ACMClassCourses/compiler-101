@@ -284,8 +284,9 @@ use 的路径都必然经过这一个 def，即这个 def 支配了所有的 use
 算法。
 
 首先我们有：$\mathit{Dom}(n) = \{n\} \bigcup \left(\bigcap_{m\in \mathit{preds}(n)} \mathit{Dom}(m)\right)$。
-即：一个节点的支配集等于其所有前驱节点支配集的共同前缀再并上自身。
-这是显而易见的，因为节点 a 支配 b 就意味着 a 支配 b 的所有前驱节点。
+即：一个节点的支配集等于其所有前驱节点支配集的交集再并上自身。
+这是显而易见的，因为若 a 支配 b 的所有前驱，这样一来所有从入口到 b 的
+任意一个前驱的路都经过 a ，那么所有入口到 b 的路也都经过 a 。
 
 我们可以通过对每个节点的迭代来计算支配集，即先假设所有节点的支配集都是节点全集，然后不断迭代直到收敛。
 具体地，你可以在迭代的每一步都运行一遍 $\mathit{Dom}(n) \leftarrow \{n\} \bigcup
@@ -367,10 +368,14 @@ edge 为 \textbf{critical edge}。
             BB3     
 \end{lstlisting}
 
+
 BB5 是我们新插入的块。这样一来，我们就把 critical edge 给消除了。
 BB3 中的 \texttt{phi} 指令会往 BB5 和 BB4 中插入拷贝，而 BB2 中的 \texttt{phi} 指令会往
 BB1 中插入拷贝，这样就不会有数据冲突了。
 
+值得一提的是，在上图中，BB2 和 BB1 之间的 edge 也是 critical edge（BB2 既然是个
+\texttt{PhiNode}，它必定是有多个前驱的，否则这个 \texttt{PhiNode} 可以直接被消除），
+实际上我们也需要在这条边上插空块，图里并没有画出来。
 \section{寄存器分配：冲突图与图染色算法}
 
 寄存器分配的目标有二：
