@@ -305,6 +305,7 @@ declare <ResultType> @<FunctionName>(...)
       \item \texttt{icmp} 指令 (\ref{LLVM-icmp-instructions})
       \item \texttt{call} 指令 (\ref{LLVM-call-instructions})
       \item \texttt{phi} 指令 (\ref{LLVM-phi-instructions})
+      \item \texttt{select} 指令 (\ref{LLVM-select-instructions})
     \end{itemize}
 \end{itemize}
 
@@ -613,9 +614,9 @@ call void @foo2(i8 97)
 \end{lstlisting}
 
 \begin{itemize}
-  \item \texttt{phi} 一般放于基本块的开头，用于通过特定的跳转来源来给变量赋值；
+  \item \texttt{phi} 指令一般放于基本块的开头，用于通过特定的跳转来源来给变量赋值；
   \item 如果从特定的 label 跳过来，则赋值为对应的值；
-  \item \texttt{result} 的类型必须为 \texttt{ResultType}（除非函数不会返回）。
+  \item \texttt{result} 的类型必须为 \texttt{ty}。
 \end{itemize}
 
 例子：
@@ -632,6 +633,31 @@ Loop:       ; Infinite loop that counts from 0 on up...
 
 \texttt{phi} 指令可以大大减少 \texttt{alloca} 的使用，减少内存访问的次数，进而提升效率。因此
 \texttt{phi} 指令在编译器优化过程中非常常见。
+
+\subsubsection{\texttt{select} 指令}\label{LLVM-select-instructions}
+
+\begin{remark}
+完整文档位于 \url{https://llvm.org/docs/LangRef.html\#select-instruction}。
+\end{remark}
+
+语法：
+\begin{lstlisting}[language=llvm]
+<result> = select i1 <cond>, <ty> <val1>, <ty> <val2>
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{select} 指令基于 \texttt{cond} 选择对应的值。
+  \item 如果 \texttt{cond} 是 \texttt{true}，则 \texttt{result}
+    为 \texttt{val1}；否则为 \texttt{val2}。
+  \item \texttt{result} 的类型必须为 \texttt{ty}。
+\end{itemize}
+
+例子：
+\begin{lstlisting}[language=llvm]
+%X = select i1 true, i8 17, i8 42
+\end{lstlisting}
+
+该指令的结果为 \texttt{17}，类型为 \texttt{i8}。
 
 \section{从抽象语法树到中间语言}\label{AST-to-IR}
 
