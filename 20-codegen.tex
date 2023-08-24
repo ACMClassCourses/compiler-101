@@ -1041,7 +1041,7 @@ rm builtin_intermediate.ll
 \subsubsection{\texttt{string} 的实现}\label{AST-to-IR-for-builtin-string}
 
 一个典型的 \texttt{string} 实现就是 C 风格的字符串，即连续的字符数组。前文已经提及，所有的类（\texttt{string}
-也可以被当成一个类）在穿参和使用时都会被当成指针，因此 \texttt{string}
+也可以被当成一个类）在传参和使用时都会被当成指针，因此 \texttt{string}
 可以被实现为指向字符数组的指针。
 
 对于字符串字面量，可以使用字符串数组实现，由于全局变量是对应类型的指针，
@@ -1054,7 +1054,7 @@ rm builtin_intermediate.ll
 如果不考虑转换成字符串形式的 IR，实际上此处字符串无需转义，但如果要转换成字符串形式的
 IR，需要将换行符 \texttt{'\textbackslash{}n'} 转换成 \texttt{'\textbackslash{}0A'}，反斜杠
 \texttt{'\textbackslash'} 转换成 \texttt{'\textbackslash\textbackslash'}，双引号
-\texttt{'\textbackslash'} 转换成 \texttt{'\textbackslash22'}。
+\texttt{'\textbackslash{}"'} 转换成 \texttt{'\textbackslash22'}。
 
 除了字符串字面量外，所有的字符串都是由 \texttt{string}
 相关内建函数及内建方法完成的。对于内建函数，只需要保证使用的和获得的是指向对应字符数组的指针即可。
