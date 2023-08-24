@@ -1063,8 +1063,8 @@ IR。在本章节中，我们会介绍如何将之前生成的 IR 转化为 RV32
 我们编译器的测试用的模拟器是 ravel，仓库位于 \url{https://github.com/Engineev/ravel}。
 
 \begin{remark}
-本章中，你可以使用 llc 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是
-\texttt{llc --march=riscv32 <src.ll>}。
+本章中，你可以使用 clang 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是
+\texttt{clang -S --target=riscv32gc-unknown-elf -O0 main.ll}。
 \end{remark}
 
 \subsection{转换方式概览}
