@@ -135,7 +135,7 @@ $p$ 只有一个后继 $n$，$n$ 只有一个前驱 $p$。记合并后的基本�
 顾名思义，它就是把一个本来要被多次反复 load 和 store 的临时变量改用寄存器（如果分配算法允许的话）来存。
 
 LLVM有一个假设：程序中所有的局部变量都在栈上，并且通过 \texttt{alloca} 指令在函数的 entry block
-进行声明，并且这些声明只出现在 entry block中。
+进行声明，并且这些声明只出现在 entry block 中。
 对于这些 \texttt{alloca}，LLVM 会做检查，如果一个 \texttt{alloca} 出来的临时变量只有
 load 和 store 作为 use，那么它就是可以被转成静态单赋值形式 (Static Single Assignment，SSA) 而被消除的。
 由于 Mx* 语言没有取地址之类的指令，所以所有的 \texttt{alloca} 指令理论上都可以被消除。
@@ -495,7 +495,7 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
     }
 \end{lstlisting}
 
-其中\texttt{MakeWorklist()}函数是初始化所有工作表。
+其中 \texttt{MakeWorklist()} 函数是初始化所有工作表。
 
 \subsection{预着色节点的处理}
 
