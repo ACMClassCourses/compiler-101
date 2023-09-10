@@ -1075,8 +1075,10 @@ IR。在本章节中，我们会介绍如何将之前生成的 IR 转化为 RV32
 我们编译器的测试用的模拟器是 ravel，仓库位于 \url{https://github.com/Engineev/ravel}。
 
 \begin{remark}
-本章中，你可以使用 clang 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的指令是
-\texttt{clang -S --target=riscv32gc-unknown-elf -O0 main.ll}。
+本章中，你可以使用 clang 辅助了解学习如何转换，将 LLVM IR 转换为 RISC-V 的命令是
+\begin{lstlisting}
+clang -S --target=riscv32gc-unknown-elf -O0 main.ll
+\end{lstlisting}
 \end{remark}
 
 \subsection{转换方式概览}
@@ -1166,53 +1168,6 @@ a:
   \item 注释以分号 (\texttt{;}) 开头。
 \end{itemize}
 
-\subsection{将 IR 函数转换为汇编}\label{IR-func-to-asm}
-
-前面已经在概览中说过，对于函数的转换，我们需要完成局部变量的内存分配、函数指令的转换，
-并遵循函数调用的约定。RISC-V Calling Convention 章节
-(\ref{RV-calling-convention}) 详细介绍了函数调用的约定。
-
-我们在 IR 时提过，\texttt{\%} 开头的变量为局部变量，在转换为汇编时，
-我们通常也会称之为「虚拟寄存器」。如何将虚拟寄存器分配到实际寄存器的过程称为「寄存器分配」。
-一个最简单的分配方式就是将所有虚拟寄存器存放于内存中，并按需读写。在这个方式下，
-程序的性能会受到非常严重的影响，因为读写内存相对于读写寄存器来说是一个相当慢的过程。
-本章中，我们就暂时以这种方式（将所有虚拟寄存器存放于内存中）进行寄存器分配，
-更高级的分配策略将会在下一个章节的寄存器分配中提到。除虚拟寄存器需要分配内存空间外，
-\texttt{alloca} 指令也需要为对应的数据分配空间。
-
-关于具体内存分配的方式，每个函数能够支配的内存只有栈（使用 malloc 的除外，
-一般函数中的局部变量等不会使用堆空间）。你可以使用的栈为进入函数时 \texttt{sp}
-指向地址以下的内存（不包含 \texttt{sp} 所指向的地址），因此如果需要使用栈，只需要减少
-\texttt{sp} 的值即可，比如需要使用 64 Bytes 的栈，那么就在函数开头执行
-\texttt{addi sp, sp, -64}，在函数返回前执行 \texttt{addi sp, sp, 64}。需要注意的是，
-根据 RISC-V 规范，栈空间需要 16 Bytes 对齐，因此栈空间必须是 16 Bytes 的倍数。
-
-因此本章中，我们只需要统计最大使用的栈空间（不要忘记调用函数时，参数也会占用栈空间），
-然后取足够放下这些变量的 16 Bytes 的倍数即可。方便进行数据对齐，
-类中的变量占用的空间均为 4 Bytes。
-
-函数指令的转换的过程较为繁琐，且除了 \texttt{phi} 指令外，思路非常简单清晰，
-本章中不会逐个具体讲解如何转换。\texttt{phi} 指令的处理可以参考目标代码优化中的静态单赋值形式
-(SSA) 的消除部分（章节 \ref{SSA-eliminate-phi}）。
-如果对转换过程有疑惑的，可以通过 llc 辅助了解。下面我们会以将 IR 函数调用转换为汇编为例，
-详细解释转换的过程。
-
-对于下面的指令：
-\begin{lstlisting}[language=LLVM]
-  %_call_result.1 = call i32 @foo(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, i32 %a8, i32 %a9)
-\end{lstlisting}
-
-我们注意到这条指令调用的函数超过了函数参数传递可用的寄存器的个数，因此会有一部分参数
-（此处为 \texttt{\%a9}）必须放在栈上传递。对于一个函数调用，我们需要：
-\begin{itemize}
-  \item 首先在函数调用前，我们必须将函数参数准备好。对于这个例子，我们需要将
-    \texttt{\%a1}—\texttt{\%a8} 分别存放在 \texttt{a0-7} 里面。
-  \item 接着，我们调用函数。在这个例子中，我们可以使用 \texttt{call foo} 来调用
-    \texttt{foo} 函数。
-  \item 最后，我们需要将 \texttt{a0} 寄存器中的值存入到 \texttt{\%\_call\_result.1}
-    对应的位置。
-\end{itemize}
-
 \subsection{RISC-V Calling Convention}\label{RV-calling-convention}
 
 对于函数来说，如果要将其转化成汇编，如何处理入参和返回值以及如何处理寄存器的储存是我们必须解决的问题。
@@ -1221,7 +1176,7 @@ a:
 \url{https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf}。
 
 在 RISC-V 的 32 个通用整型寄存器中，有几个寄存器在使用时一般会有特定的用途。表
-\ref{RV-calling-convention} 列举了文档中每个寄存器通常的用途。
+\ref{RV-calling-convention-register} 列举了文档中每个寄存器通常的用途。
 
 由于 Mx* 中函数调用的参数的类型最多只有 32 位且都是整型（函数调用只会用到指针类型、\texttt{int}
 类型、\texttt{bool} 类型），在进行函数调用时，每个参数都使用一个寄存器。因此根据 RISC-V
@@ -1232,7 +1187,7 @@ Calling Convention，函数的第一至第八个入参分别存放于 \texttt{a0
 另一个问题在于，当函数调用另一个函数时，寄存器的值会被更改，造成潜在的问题。
 一个简单的解决方案是在调用前保存全部寄存器，但这样会导致函数调用时需要多次读写内存，
 造成不必要的性能损失，因此 RISC-V 文档中约定了每个寄存器应当由调用者 (caller) 还是被调用者
-(callee) 保存（参见表 \ref{RV-calling-convention}）。如果是调用者 (caller)
+(callee) 保存（参见表 \ref{RV-calling-convention-register}）。如果是调用者 (caller)
 保存，那么调用者需要先保存这一部分的寄存器（如果寄存器被使用过），然后调用函数；如果是被调用者
 (callee) 保存，那么被调用者如果要使用对应的寄存器，需要先保存寄存器原来的值，然后在返回前保存寄存器的值。
 
@@ -1258,5 +1213,79 @@ Calling Convention，函数的第一至第八个入参分别存放于 \texttt{a0
 \texttt{x28-31} & \texttt{t3-6} & 临时量 & Caller \\
 \hline
 \end{tabular}
-\caption{RISC-V Calling Convention 寄存器}\label{RV-calling-convention}
+\caption{RISC-V Calling Convention 寄存器}\label{RV-calling-convention-register}
 \end{table}
+
+\subsection{将 IR 函数转换为汇编}\label{IR-func-to-asm}
+
+前面已经在概览中说过，对于函数的转换，我们需要完成局部变量的内存分配
+(\ref{IR-func-to-asm-local-variable})、函数指令的转换
+(\ref{IR-func-to-asm-instruction})，
+并遵循函数调用的约定。RISC-V Calling Convention 章节
+(\ref{RV-calling-convention}) 详细介绍了函数调用的约定。
+
+\subsubsection{局部变量的内存分配}\label{IR-func-to-asm-local-variable}
+
+我们在 IR 时提过，\texttt{\%} 开头的变量为局部变量，在转换为汇编时，
+我们通常也会称之为「虚拟寄存器」。如何将虚拟寄存器分配到实际寄存器的过程称为「寄存器分配」。
+一个最简单的分配方式就是将所有虚拟寄存器存放于内存中，并按需读写。在这个方式下，
+程序的性能会受到非常严重的影响，因为读写内存相对于读写寄存器来说是一个相当慢的过程。
+本章中，我们就暂时以这种方式（将所有虚拟寄存器存放于内存中）进行寄存器分配，
+更高级的分配策略将会在下一个章节的寄存器分配中提到。除虚拟寄存器需要分配内存空间外，
+\texttt{alloca} 指令也需要为对应的数据分配空间。
+
+关于具体使用的内存，每个函数能够支配的内存只有栈（使用 malloc 的除外，
+一般函数中的局部变量等不会使用堆空间）。你可以使用的栈为进入函数时 \texttt{sp}
+指向地址以下的内存（不包含 \texttt{sp} 所指向的地址），因此如果需要使用栈，只需要减少
+\texttt{sp} 的值即可，比如需要使用 64 Bytes 的栈，那么就在函数开头执行
+\texttt{addi sp, sp, -64}，在函数返回前执行 \texttt{addi sp, sp, 64}。需要注意的是，
+根据 RISC-V 规范，栈空间需要 16 Bytes 对齐，因此栈空间必须是 16 Bytes 的倍数。
+
+因此本章中，我们只需要统计最大使用的栈空间（不要忘记调用函数时，参数也会占用栈空间），
+然后取足够放下这些变量的 16 Bytes 的倍数即可。方便进行数据对齐，
+类中的变量占用的空间均为 4 Bytes。
+
+比如对于下面的 LLVM IR 函数
+\begin{lstlisting}
+define i32 @foo() {
+entry:
+  %a = alloca i32
+  %a.val.1 = load i32, ptr %a
+  %add.1 = add i32 %a.val.1, %a.val.1
+  ret %add.1
+}
+\end{lstlisting}
+我们发现函数需要分配 4 个 \texttt{i32}（1 个给 \texttt{alloca}，3 个给局部变量），函数调用方面无需栈空间。
+因此，我们需要 16 Bytes 的栈空间，即在函数开头执行 \texttt{addi sp, sp, -16}，
+在函数返回前执行 \texttt{addi sp, sp, 16}。对于这 16 Bytes 的空间，我们可以这样分配空间——相对于新
+\texttt{sp} 的 0—3, 4—7, 8—11 Bytes 分别用于存放 \texttt{\%a}, \texttt{\%a.val.1}, \texttt{\%add.1}，
+12—15 Bytes 用于存放 \texttt{alloca} 指向的空间。如果需要读取 \texttt{\%a} 的值，那么我们可以
+\texttt{lw a0, 0(sp)} 来将 \texttt{\%a} 的值存到 \texttt{a0} 寄存器中；如果需要写入 \texttt{\%a}，
+那么我们可以 \texttt{sw a0, 0(sp)} 来将 \texttt{a0} 寄存器中的值存入到 \texttt{\%a}。
+
+\subsubsection{函数指令的转换}\label{IR-func-to-asm-instruction}
+
+函数指令的转换的过程较为繁琐，且除了 \texttt{phi} 指令外，思路非常简单清晰，
+本章中不会逐个具体讲解如何转换。\texttt{phi} 指令的处理可以参考目标代码优化中的静态单赋值形式
+(SSA) 的消除部分（章节 \ref{SSA-eliminate-phi}）。
+如果对转换过程有疑惑的，可以通过 llc 辅助了解。下面我们会以将 IR 函数调用转换为汇编为例，
+详细解释转换的过程。
+
+对于下面的指令：
+\begin{lstlisting}[language=LLVM]
+  %_call_result.1 = call i32 @foo(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, i32 %a8, i32 %a9, i32 %10)
+\end{lstlisting}
+
+我们注意到这条指令调用的函数超过了函数参数传递可用的寄存器的个数，因此会有一部分参数
+（此处为 \texttt{\%a9} 和 \texttt{\%a10}）必须放在栈上传递。对于一个函数调用，我们需要：
+\begin{itemize}
+  \item 首先在函数调用前，我们必须将函数参数准备好。对于这个例子，我们需要将
+    \texttt{\%a1}—\texttt{\%a8} 分别存放在 \texttt{a0-7} 里面，并将 \texttt{\%a9}
+    和 \texttt{\%a10} 分别存放在 \texttt{sp}—\texttt{sp+3} 和 \texttt{sp+4}—\texttt{sp+8}
+    Bytes 中。注意：请务必保证这样存放数据不会覆盖或影响到函数的其他栈上数据，如果会覆盖或影响到其他的数据，
+    请增大栈空间。
+  \item 接着，我们调用函数。在这个例子中，我们可以使用 \texttt{call foo} 来调用
+    \texttt{foo} 函数。
+  \item 最后，我们需要将 \texttt{a0} 寄存器中的值存入到 \texttt{\%\_call\_result.1}
+    对应的位置。
+\end{itemize}
