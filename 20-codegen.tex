@@ -838,6 +838,9 @@ store i32 1, ptr %a
 %b = load i32, ptr %5
 \end{lstlisting}
 
+虽然这样的设计看起来效率很低，总是要读写内存，但是 Mem2Reg 优化 (\ref{mem2reg}) 可以把这样的
+\texttt{alloca} 指令全部转化到寄存器中。
+
 \subsubsection{处理语句}\label{AST-to-IR-statements}
 
 Mx* 中，有五种语句——变量声明语句、条件语句、循环语句、跳转语句、表达式语句。我们会一一解释针对每一种语句如何进行转换。
