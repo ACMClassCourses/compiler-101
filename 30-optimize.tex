@@ -136,31 +136,36 @@ $p$ 只有一个后继 $n$，$n$ 只有一个前驱 $p$。记合并后的基本�
 效率不高，因此 LLVM 提供了一个将 \texttt{alloca} 指令转化为虚拟寄存器的方案来提升效率。
 此外，这样的操作也会方便静态分析，因为相较于虚拟寄存器，内存的数据更难分析。
 
-LLVM有一个假设：程序中所有的局部变量都在栈上，并且通过 \texttt{alloca} 指令在函数的 entry block
-进行声明，并且这些声明只出现在 entry block 中。
-对于这些 \texttt{alloca}，LLVM 会做检查，如果一个 \texttt{alloca} 出来的临时变量只有
-load 和 store 作为 use，那么它就是可以被转成静态单赋值形式 (Static Single Assignment，SSA) 而被消除的。
-由于 Mx* 语言没有取地址之类的指令，所以所有的 \texttt{alloca} 指令理论上都可以被消除。
+LLVM 假设程序中所有的局部变量都在栈上，并且通过 \texttt{alloca} 指令在函数的入口块进行声明，
+并且这些声明只出现在入口块中。对于这些 \texttt{alloca}，LLVM 会做检查，如果一个 \texttt{alloca} 出来的临时变量只有
+load 和 store 作为 use，那么它就可以被转成静态单赋值形式 (Static Single Assignment，SSA) 而被消除的。
+这样的优化成为 Mem2Reg。由于 Mx* 语言没有取地址之类的指令，所以所有的 \texttt{alloca} 指令理论上都可以被消除。
 
-把 \texttt{alloca} 交由编译器后端来处理是很复杂的。所以我们需要将它们转换成 SSA 形式。
-简单地说，我们需要通过插入 \texttt{phi} 函数的形式来表示变量在从不同分支而来的块中被赋值，这样就可以消除
-\texttt{alloca} 了。
-而如何正确插入 \texttt{phi}函数，我们需要在支配树上做分析，最后再根据我们放置的
-\texttt{phi} 函数来重写 \texttt{load} 与 \texttt{store} 指令。
-
-总的来说，将 IR 转化成 SSA 形式，我们就容易在支配树上做支配关系的分析，从而确定一些与控制流无关的数据流。
+在 Mem2Reg 优化的过程中，我们的目标是尽可能减少 \texttt{alloca} 的数量。具体的优化方法有
+\begin{enumerate}
+    \item 没有被使用的 \texttt{alloca} 可以直接去掉；
+    \item 如果只被定义了一次，那么所有的使用都可以用定义的值代替；
+    \item 如果一个 \texttt{alloca} 的定义使用只出现在一个块中，那么每个 use 可以被最近的 def 替换；
+    \item 如果一个 \texttt{alloca} 只被 \texttt{load} 和 \texttt{store}，那么可以通过在支配边界插入
+        \texttt{phi} 指令，并将所有的 use 替换为对应的 \texttt{phi} 指令的结果。
+\end{enumerate}
+在这些方法中，\texttt{alloca} 指令都可以被去掉。前 3 个方法较为简单，本文不会详细介绍；
+第 4 个方法将会在后文中详细介绍。
 
 \subsection{静态单赋值形式 (SSA) 与 \texttt{phi} 指令}
 
-静态单赋值形式 (Single Static Assignment)，顾名思义即每个变量只被赋值一次。
-对于多次赋值，我们用变量的不同 “版本” 来控制。例如：
+在编译器中，静态是指不运行程序，与动态相对。静态单赋值形式 (Static Single Assignment)，
+即静态来看每个变量只被赋值一次，也就是函数中只有一个对其赋值的指令。这里需要注意，即便符合 SSA 形式，
+如果多次执行赋值指令所在的块，这个变量也会被多次赋值。
+
+对于静态多次赋值，我们用变量的不同 “版本” 来控制。例如：
 \begin{lstlisting}[language=LLVM]
     %x = add i32 1, 2
     %x = add i32 %x, 3
     %x = add i32 %x, 4
 \end{lstlisting}
 
-转化为SSA形式后：
+转化为 SSA 形式后：
 \begin{lstlisting}[language=LLVM]
     %x.0 = add i32 1, 2
     %x.1 = add i32 %x.0, 3
@@ -176,14 +181,14 @@ SSA 形式通过插入 \texttt{phi} 指令来处理控制流分支的问题。
     %x.0 = phi <type> [ <val1>, <block1> ], [ <val2>, <block2> ], [ <val3>, <block3> ]
 \end{lstlisting}
 
-这代表着，变量 \texttt{x.0} 将被赋值 \texttt{val1}（如果控制流通过了 \texttt{block1}
+这代表着，变量 \texttt{\%x.0} 将被赋值 \texttt{val1}（如果控制流通过了 \texttt{block1}
 所在的分支而来），或 \texttt{val2}（控制流通过了 \texttt{block2}
 所在的分支而来）或 \texttt{val3}（控制流通过了 \texttt{block3} 所在的分支而来）。
 
 从具体效果上看，可以看下面这个例子：
 \begin{lstlisting}[language=C]
 // 这是一段简单的 C 代码
-int main(){
+int main() {
     int x = 2, y = 3;
     int b;
     if(x + 1 > y) {
@@ -199,7 +204,7 @@ int main(){
 
 \begin{lstlisting}[language=LLVM]
 ; 不带优化的 LLVM IR
-define dso_local i32 @main() #0 {
+define i32 @main() {
 entry:
   %retval = alloca i32, align 4
   %x = alloca i32, align 4
@@ -228,7 +233,7 @@ if.end:                                           ; preds = %if.else, %if.then
 }
 
 ; 带 Mem2Reg 优化的 LLVM IR
-define dso_local i32 @main() #0 {
+define i32 @main() {
 entry:
   %add = add nsw i32 2, 1
   %cmp = icmp sgt i32 %add, 3
@@ -246,34 +251,35 @@ if.end:                                           ; preds = %if.else, %if.then
 }
 \end{lstlisting}
 可以看到 Mem2Reg 优化过后，代码干净了很多。注意到最后一个基本块开头的 \texttt{phi} 指令。
-而如何正确地插入 \texttt{phi} 指令，我们需要通过构建支配树来分析。
+而如何正确地插入 \texttt{phi} 指令，我们需要通过支配关系来分析。
 
-\subsection{支配树与 \texttt{phi} 指令的放置}
+\subsection{支配关系}
 
-关于支配树，我们需要引入一些概念：
+为了确定支配关系，我们需要引入一些概念：
 
 \begin{description}
     \item[支配 (Dominate)]
     如果每一条从流图的入口节点到节点 $n$ 的路径都经过节点 $d$, 我们就说 $d$ 支配 $n$，记为 $d$ dom $n$。
     请注意，在这个定义下每个节点都支配它自己。
+
+    \item[严格支配 (Strictly Dominate)]
+    $d$ 严格支配 $n$ 当且仅当 $d$ 支配 $n$ 且 $n\neq d$, 记作 $d$ sdom $n$。
+
     \item[支配集]
     节点 $n$ 的支配集合是所有支配 $n$ 的节点的集合，记为 $\mathit{Dom}(n)$。
-    \item[严格支配 (Strictly Dominate)]
-    $n$ 严格支配 $d$ 当且仅当 $d$ 支配 $n$ 且 $n\neq d$, 记作 $d$ sdom $n$。
-       
-    \item[支配树 (Dominator Tree)]
-    通过节点之间的支配关系，我们就可以依此来建立一颗支配树。在支配树中，节点 a 到 b 连边当且仅当 a 严格支配 b。
 
     \item[中间支配节点 (Intermediate Dominator, IDom)]
     在支配树中，对于节点 n 来说，从根节点到节点 n 所在路径上的节点（不包括）都严格支配节点 n，
     我们把在该路径上距离 n 最近的支配 n 的节点称作节点 n 的直接支配节点。
+
+    \item[支配树 (Dominator Tree)]
+    通过节点之间的支配关系，我们就可以依此来建立一颗支配树。在支配树中，节点 a 到 b 连边当且仅当
+    a 是 b 的中间支配节点。
+
     \item[支配边界 (Dominance Frontier)]
     Y 是 X 的支配边界，当且仅当 X 支配 Y 的一个前驱节点（在 CFG 中）
     同时 X 并不严格支配 Y。
 \end{description}
-
-如果达到了 def 所在 block 的支配边界，就必须考虑其他路径是否有其他表示着相同变量的不同版本的定义，
-所以需要放置 \texttt{phi} 指令。放置 \texttt{phi} 指令前我们需要确定支配集、确定中间支配节点、建构支配树。
 
 \subsubsection{确定支配集}
 
@@ -287,7 +293,7 @@ if.end:                                           ; preds = %if.else, %if.then
 具体地，你可以在迭代的每一步都运行一遍 $\mathit{Dom}(n) \leftarrow \{n\} \bigcup
 \left(\bigcap_{m\in \mathit{preds}(n)} \mathit{Dom}(m)\right)$,
 直到一遍下来所有 $\mathit{Dom}(n)$ 不发生变化为止。
-由于控制流图是前向传播的，所以这里迭代的顺序一般采用 RPO (Reverse Post Order)。
+由于控制流图是前向传播的，所以这里迭代的顺序一般采用 BFS 序。
 
 这样我们就获得了所有的 $\mathit{Dom}(n)$, 也就是获得了所有节点的支配关系。
 
@@ -306,74 +312,153 @@ if.end:                                           ; preds = %if.else, %if.then
 根据每个节点的中间支配节点，我们可以建构支配树。每个节点的中间支配节点到对应节点连边。
 由于除入口节点外的每个节点入度都为 1，这样的图构成一棵支配树。
 
+\subsubsection{确定支配边界}
+
+根据支配边界的定义，一个节点 X 是节点 Y 的支配边界，当且仅当 Y 在 X 的一个前驱节点的支配集中但 Y 不在 X 的支配集中。
+因此，$n$ 是且仅是 $\bigcup_{m\in\mathit{preds}(n)}\left(\mathit{Dom}(m)-(\mathit{Dom}(n)-\{n\})\right)$
+中元素的支配边界。
+
+基于上面的原理，通过遍历所有基本块，我们就可以确定所有基本块的支配边界了。
+
 \subsubsection{\texttt{phi} 指令放置算法}
 
-\texttt{phi} 指令的放置分为两个步骤——加入 \texttt{phi} 指令和替换原来的变量使用。
+\texttt{phi} 指令的放置分为两个步骤——预留 \texttt{phi} 指令和替换原来的变量使用。
 
-对于加入 \texttt{phi} 指令，比较朴素的一个想法是：先收集所有被定义过的变量名（即 \texttt{alloca} 指令的结果），
-再对每个变量名遍历找到所有变量的 def，在这些 def 所在块的支配边界的头部插入 \texttt{phi} 指令。
+对于加入 \texttt{phi} 指令，我们需要先收集所有被定义过的变量名（即 \texttt{alloca} 指令的结果），
+再对每个变量名遍历找到所有变量的 def，在这些 def 所在块的支配边界的头部预留 \texttt{phi} 指令。
+然后对预留了 \texttt{phi} 指令的块的支配边界头部再预留 \texttt{phi} 指令。重复操作，
+直到没有新的支配边界或者对应块的支配边界已经预留了对应变量的 \texttt{phi} 指令。
 
-\texttt{phi} 函数放置完毕后，我们需要对变量的使用进行重命名，即维护好之前提到的变量的 “版本”。
-一种可行的方式是：我们可以对每个变量名开一个栈。在每个基本块中，算法首先重命名入口顶部的
-\texttt{phi} 指令所定义的值，然后按序访问程序块中的各个指令。算法会用当前的形式名（栈顶）重写各个操作数，
-并为操作的结果创建一个新的形式名（入栈），使得新名字成为当前的名字。在基本块中所有的操作都已经重写之后，
-我们将使用当前的形式名重写程序块在 CFG 中各后继节点中的适当 \texttt{phi} 指令的参数。
-最后，对当前基本块在支配树中的子节点进行递归处理，这是一个在 CFG 上 DFS 的过程。当算法从这些递归调用返回时，
-它会将当前形式变量名的集合恢复到访问当前块之前的状态（出栈）。
+\texttt{phi} 指令放置完毕后，我们需要对变量的使用进行重命名，即维护好之前提到的变量的 “版本”。
+重命名的过程包括：为所有的 use 替换变量名、确定 \texttt{phi} 指令中不同块进入对应的值。
+一种可行的方式是为每个变量名开一个栈。具体的操作为
+\begin{itemize}
+  \item 在每个基本块中，算法首先重命名入口顶部的 \texttt{phi} 指令所定义的值，
+    然后按序访问程序块中的各个指令。算法会用当前的形式名（栈顶）重写各个操作数，
+    并为操作的结果创建一个新的形式名（入栈），使得新名字成为当前的名字。
+  \item 在基本块中所有的操作都已经重写之后，
+    我们将使用当前的形式名重写程序块在 CFG 中各后继节点中的适当 \texttt{phi} 指令的参数。
+  \item 最后，对当前基本块在支配树中的子节点进行递归处理，这是一个在 CFG 上 DFS 的过程。
+  \item 当算法从这些递归调用返回时，它会将当前形式变量名的集合恢复到访问当前块之前的状态（出栈）。
+\end{itemize}
 
 \subsection{静态单赋值形式 (SSA) 的消除} \label{SSA-eliminate-phi}
 
-经过 mem2reg，我们生成了很多 \texttt{phi}。然而，汇编中没有 \texttt{phi} 指令的直接对应，所以我们须将其消除，
-用等价的其余指令如 \texttt{move} 来代替。一般地，我们在拥有 \texttt{phi} 指令的这个块的前驱块中插入一份拷贝，
-例如：（BB 表示 \textbf{B}asic \textbf{B}lock）
-\begin{lstlisting}
-        BB1
-        x1 = 0
-        /    \
-    BB2      BB3
-    x2 = 1   x3 = 2
-      \    /
-         BB4
-         x4 = phi[(x2,BB2), (x3,BB3)]
-\end{lstlisting}
+经过 Mem2Reg，我们生成了很多 \texttt{phi}。然而，汇编中没有 \texttt{phi} 指令的直接对应，所以我们须将其消除，
+用等价的其余指令如 \texttt{move} 来代替（注意这里的 \texttt{move} 属于内部实现，既不是 LLVM IR 的指令，
+也不属于汇编）。一般地，我们在拥有 \texttt{phi} 指令的这个块的前驱块中插入一份拷贝，
+例如图 \ref{fig:SSA-eliminate-phi-1}（BB 表示 \textbf{B}asic \textbf{B}lock）。
 
-我们就将 \texttt{x4} 的拷贝插入 BB2 和 BB3 中，得到：
-\begin{lstlisting}
-        BB1
-        x1 = 0
-        /     \
-    BB2        BB3
-    x2 = 1     x3 = 2
-    x4 = x2    x4 = x3
-    \       /
-           BB4
-         ...
-\end{lstlisting}
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+squarednode/.style={rectangle, draw=black!100, fill=black!5, very thick, minimum size=5mm, align=center},
+nothing/.style={circle, draw=white, minimum size=0}
+]
+\node[squarednode] (BB1) {BB1\\\texttt{x1=0}};
+\node[nothing] (mid) [below=of BB1] {};
+\node[squarednode] (BB2) [left=of mid] {BB2\\\texttt{x2=1}};
+\node[squarednode] (BB3) [right=of mid] {BB3\\\texttt{x3=2}};
+\node[squarednode] (BB4) [below=of mid] {BB4\\\texttt{x4=phi [x2, BB2], [x3, BB3]}};
 
-这样的操作能解决大部分的 \texttt{phi} 指令，但是还有一些特殊情况需要处理，例如：
-\begin{lstlisting}
-      BB1      BB4
-      /  \    /
-    BB2   BB3
-\end{lstlisting}
+\draw[thick,->] (BB1) -- (BB2.north);
+\draw[thick,->] (BB1) -- (BB3.north);
+\draw[thick,->] (BB2.south) -- (BB4);
+\draw[thick,->] (BB3.south) -- (BB4);
+\end{tikzpicture}
+\begin{tikzpicture}[
+squarednode/.style={rectangle, draw=black!100, fill=black!5, very thick, minimum size=5mm, align=center},
+nothing/.style={circle, draw=white, minimum size=0}
+]
+\node[nothing] (BB1) {};
+\node[nothing] (mid) [below=of BB1] {};
+\node[nothing] (BB2) [left=of mid] {};
+\node[nothing] (BB3) [right=of mid] {};
+\node[nothing] (BB4) [below=of mid] {};
 
-我们看到BB1有两个后继，BB3 有两个前驱。假设 BB2、BB3 都有 \texttt{phi} 指令，则它们都会往
-BB1 插入拷贝，这就会导致该变量在 BB1 上被修改，从而影响到 BB2 所在的分支进而引起数据冲突。
-我们发现，BB1-BB3 之间的这条 edge 有这样的特点：出端有多个后继且入端有多个前驱。我们称这样的
-edge 为 \textbf{critical edge}。
+\draw[very thick, draw=black!50, ->] (BB2) -- (BB3);
+\end{tikzpicture}
+\begin{tikzpicture}[
+squarednode/.style={rectangle, draw=black!100, fill=black!5, very thick, minimum size=5mm, align=center},
+nothing/.style={circle, draw=white, minimum size=0}
+]
+\node[squarednode] (BB1) {BB1\\\texttt{x1=0}};
+\node[nothing] (mid) [below=of BB1] {};
+\node[squarednode] (BB2) [left=of mid] {BB2\\\texttt{x2=1}\\\texttt{x4=x2}};
+\node[squarednode] (BB3) [right=of mid] {BB3\\\texttt{x3=2}\\\texttt{x4=x3}};
+\node[squarednode] (BB4) [below=of mid] {BB4};
+
+\draw[thick,->] (BB1) -- (BB2.north);
+\draw[thick,->] (BB1) -- (BB3.north);
+\draw[thick,->] (BB2.south) -- (BB4);
+\draw[thick,->] (BB3.south) -- (BB4);
+\end{tikzpicture}
+\captionsetup{justification=centering}
+\caption{左图为消除 \texttt{phi} 前的控制流图，右图为 \texttt{phi} 消除后的控制流图。\\可以发现右图将 \texttt{x4} 对应的取值插入到了 BB2 和 BB3 中。}
+\label{fig:SSA-eliminate-phi-1}
+\end{figure}
+
+这样的操作能解决大部分的 \texttt{phi} 指令，但是还有一些特殊情况需要处理，例如图
+\ref{fig:SSA-eliminate-phi-2} 的左图。
+
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+squarednode/.style={rectangle, draw=black!100, fill=black!5, very thick, minimum size=5mm, align=center},
+nothing/.style={circle, draw=white, minimum size=0}
+]
+\node[squarednode] (BB1) {BB1};
+\node[nothing] (mid1) [right=of BB1] {};
+\node[nothing] (mid2) [below=of BB1] {};
+\node[squarednode] (BB2) [left=of mid2] {BB2};
+\node[squarednode] (BB3) [right=of mid2] {BB3};
+\node[squarednode] (BB4) [right=of mid1] {BB4};
+
+\draw[thick,->] (BB1) -- (BB2);
+\draw[thick,->] (BB1) -- (BB3);
+\draw[thick,->] (BB4.south) -- (BB3);
+\end{tikzpicture}
+\begin{tikzpicture}[
+squarednode/.style={rectangle, draw=black!100, fill=black!5, very thick, minimum size=5mm, align=center},
+nothing/.style={circle, draw=white, minimum size=0}
+]
+\node[nothing] (BB1) {};
+\node[nothing] (mid) [below=of BB1] {};
+\node[nothing] (BB2) [left=of mid] {};
+\node[nothing] (BB3) [right=of mid] {};
+\node[nothing] (BB4) [below=of mid] {};
+
+\draw[very thick, draw=black!50, ->] (BB2) -- (BB3);
+\end{tikzpicture}
+\begin{tikzpicture}[
+squarednode/.style={rectangle, draw=black!100, fill=black!5, very thick, minimum size=5mm, align=center},
+nothing/.style={circle, draw=white, minimum size=0}
+]
+\node[squarednode] (BB1) {BB1};
+\node[nothing] (mid1) [below=of BB1] {};
+\node[squarednode] (BB2) [left=of mid1] {BB2};
+\node[squarednode] (BB5) [right=of mid1] {BB5};
+\node[nothing] (mid2) [right=of BB5] {};
+\node[squarednode] (BB4) [right=of mid2] {BB4};
+\node[squarednode] (BB3) [below=of mid2] {BB3};
+
+\draw[thick,->] (BB1) -- (BB2);
+\draw[thick,->] (BB1) -- (BB5);
+\draw[thick,->] (BB5) -- (BB3);
+\draw[thick,->] (BB4.south) -- (BB3);
+\end{tikzpicture}
+\captionsetup{justification=centering}
+\caption{左图为原控制流图，右图为插入新基本块 BB5 后的控制流图。\\BB1 到 BB3 构成 critical edge，有数据冲突隐患，因此二者间需要插入空基本块 BB5 以消除 critical edge。}
+\label{fig:SSA-eliminate-phi-2}
+\end{figure}
+
+我们看到图 \ref{fig:SSA-eliminate-phi-2} 左图的 BB1 有两个后继，BB3 有两个前驱。
+假设 BB2、BB3 都有 \texttt{phi} 指令，则它们都会往 BB1 插入拷贝，这就会导致该变量在 BB1 上被修改，
+从而影响到 BB2 所在的分支进而引起数据冲突。我们发现，BB1 与 BB3 之间的这条边有这样的特点：
+出端有多个后继且入端有多个前驱。我们称这样的边为 \textbf{critical edge}。
 
 所有的 critical edge 都可能会引起上述的数据冲突。
-为了解决 critical edge，我们需要在 critical edge 中间插入一个新的空基本块，即：
-\begin{lstlisting}
-    BB1    
-    /  \       
-  BB2   BB5  BB4
-        \    /   
-            BB3     
-\end{lstlisting}
-
-
-BB5 是我们新插入的块。这样一来，我们就把 critical edge 给消除了。
+为了解决 critical edge，我们需要在 critical edge 中间插入一个新的空基本块 BB5 以消除 critical edge。
 BB3 中的 \texttt{phi} 指令会往 BB5 和 BB4 中插入拷贝，而 BB2 中的 \texttt{phi} 指令会往
 BB1 中插入拷贝，这样就不会有数据冲突了。
 
