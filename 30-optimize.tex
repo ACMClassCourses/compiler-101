@@ -78,14 +78,14 @@
 
 变量（当然你可以称之为虚拟寄存器）在每个块中的活跃状态可由它们的 def 和 use 算出。对每个节点 $n$ 都有：
 （下文中 $\mathit{suc}$ 表示后继节点的集合）
-\begin{align*}
-\mathit{in}[n]  &= \mathit{use}[n] \cup (\mathit{out}[n] - \mathit{def}[n]), \\
-\mathit{out}[n] &= \bigcup_{s \in \mathit{suc}[n]} \mathit{in}[s].
-\end{align*}
+\begin{align}
+\label{live-analysis-data-flow-1}\mathit{in}[n]  &= \mathit{use}[n] \cup (\mathit{out}[n] - \mathit{def}[n]), \\
+\label{live-analysis-data-flow-2}\mathit{out}[n] &= \bigcup_{s \in \mathit{suc}[n]} \mathit{in}[s].
+\end{align}
 以及边界条件：
-$$
-\mathit{out}[\mathit{exit}] = \emptyset
-$$
+\begin{align}
+\label{live-analysis-data-flow-3}\mathit{out}[\mathit{exit}] = \emptyset
+\end{align}
 上面的式子被称为\textbf{活跃分析的数据流方程}。
 
 \begin{itemize}
@@ -134,14 +134,12 @@ $p$ 只有一个后继 $n$，$n$ 只有一个前驱 $p$。记合并后的基本�
 在从抽象语法树到 LLVM IR 的转换时，我们使用 \texttt{alloca} 指令来处理局部变量
 (\ref{AST-to-IR-local-variables})。尽管这样处理起来十分方便，然而每次使用都需要读写内存，
 效率不高，因此 LLVM 提供了一个将 \texttt{alloca} 指令转化为虚拟寄存器的方案来提升效率。
-此外，这样的操作也会方便静态分析，因为相较于虚拟寄存器，内存的数据更难分析。
+此外，这样的操作也会方便静态分析，因为相较于虚拟寄存器，内存的数据更难分析。这个优化被称为 Mem2reg，
+Mem 是指 \texttt{alloca} 指令将数据存于内存中，Reg 是指优化后数据将会放在虚拟寄存器中，
+整个优化的过程即为将通过 \texttt{alloca} 指令而存在内存中数据迁移到寄存器中，因而称作 Mem2Reg。
 
-LLVM 假设程序中所有的局部变量都在栈上，并且通过 \texttt{alloca} 指令在函数的入口块进行声明，
-并且这些声明只出现在入口块中。对于这些 \texttt{alloca}，LLVM 会做检查，如果一个 \texttt{alloca} 出来的临时变量只有
-load 和 store 作为 use，那么它就可以被转成静态单赋值形式 (Static Single Assignment，SSA) 而被消除的。
-这样的优化成为 Mem2Reg。由于 Mx* 语言没有取地址之类的指令，所以所有的 \texttt{alloca} 指令理论上都可以被消除。
-
-在 Mem2Reg 优化的过程中，我们的目标是尽可能减少 \texttt{alloca} 的数量。具体的优化方法有
+在 Mem2Reg 优化的过程中，我们的目标是尽可能减少 \texttt{alloca} 的数量。具体的优化方法有（注意下文中的 def 和
+use 是指 \texttt{alloca} 产生的空间的 def 和 use）
 \begin{enumerate}
     \item 没有被使用的 \texttt{alloca} 可以直接去掉；
     \item 如果只被定义了一次，那么所有的使用都可以用定义的值代替；
@@ -149,8 +147,10 @@ load 和 store 作为 use，那么它就可以被转成静态单赋值形式 (St
     \item 如果一个 \texttt{alloca} 只被 \texttt{load} 和 \texttt{store}，那么可以通过在支配边界插入
         \texttt{phi} 指令，并将所有的 use 替换为对应的 \texttt{phi} 指令的结果。
 \end{enumerate}
-在这些方法中，\texttt{alloca} 指令都可以被去掉。前 3 个方法较为简单，本文不会详细介绍；
+经过上述的优化方法，大多数 \texttt{alloca} 指令都可以被去掉。前 3 个方法较为简单，本文不会详细介绍；
 第 4 个方法将会在后文中详细介绍。
+
+由于 Mx* 语言没有取地址之类的指令，所以所有的 \texttt{alloca} 指令理论上都可以被消除。
 
 \subsection{静态单赋值形式 (SSA) 与 \texttt{phi} 指令}
 
@@ -268,13 +268,13 @@ if.end:                                           ; preds = %if.else, %if.then
     \item[支配集]
     节点 $n$ 的支配集合是所有支配 $n$ 的节点的集合，记为 $\mathit{Dom}(n)$。
 
-    \item[中间支配节点 (Intermediate Dominator, IDom)]
+    \item[直接支配节点 (Immediate Dominator, IDom)]
     在支配树中，对于节点 n 来说，从根节点到节点 n 所在路径上的节点（不包括）都严格支配节点 n，
     我们把在该路径上距离 n 最近的支配 n 的节点称作节点 n 的直接支配节点。
 
     \item[支配树 (Dominator Tree)]
     通过节点之间的支配关系，我们就可以依此来建立一颗支配树。在支配树中，节点 a 到 b 连边当且仅当
-    a 是 b 的中间支配节点。
+    a 是 b 的直接支配节点。
 
     \item[支配边界 (Dominance Frontier)]
     Y 是 X 的支配边界，当且仅当 X 支配 Y 的一个前驱节点（在 CFG 中）
@@ -297,19 +297,19 @@ if.end:                                           ; preds = %if.else, %if.then
 
 这样我们就获得了所有的 $\mathit{Dom}(n)$, 也就是获得了所有节点的支配关系。
 
-\subsubsection{确定中间支配节点 (IDom)}
+\subsubsection{确定直接支配节点 (IDom)}
 
 我们观察到支配集具有一个重要性质——节点 n 的支配集里任意两个不同的块中，一个块必然支配另一个。
 否则两个块互不支配，因此存在一个从入口经过一个块但不经过另一个到达 n 的路径，与支配定义矛盾。
 
-基于这个性质，我们发现支配集中的元素构成一条链，且中间支配节点的支配集元素比当前节点少
+基于这个性质，我们发现支配集中的元素构成一条链，且直接支配节点的支配集元素比当前节点少
 1（实际上，如果按照这些元素的支配集元素个数排序，这些元素的支配集元素每个之间都差 1）。
-因此，要确定当前节点的中间支配节点，只需要找到支配集元素个数为当前节点的支配集元素个数减 1 的节点。
+因此，要确定当前节点的直接支配节点，只需要找到支配集元素个数为当前节点的支配集元素个数减 1 的节点。
 注意，同样因为刚才的性质，这样的节点数量有且只有一个。
 
 \subsubsection{支配树构建算法}
 
-根据每个节点的中间支配节点，我们可以建构支配树。每个节点的中间支配节点到对应节点连边。
+根据每个节点的直接支配节点，我们可以建构支配树。每个节点的直接支配节点到对应节点连边。
 由于除入口节点外的每个节点入度都为 1，这样的图构成一棵支配树。
 
 \subsubsection{确定支配边界}
@@ -481,120 +481,96 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
     \item 将变量抽象为点；
     \item 将分配寄存器抽象为染色。如果能够染色，表明对应的变量在其生命周期里可以一直保存在寄存器中。
     \item 如果两个变量不能保存在同一个寄存器里（存在 “冲突”），那么这二者之间连边。规定染色时连边的两点不能同色。
-    \item 允许一个变量不被染色，这意味着这个变量需要存在栈上，并不一直占用寄存器资源。
+        存在冲突意味着两个变量同时活跃。注意冲突是相互的，所以这里的边是无向边。
+    \item 由于寄存器的数量是有限的，因此有可能会发生一个图无法被染色。在这种情况下，为了提升性能，
+        我们希望将更少的变量存到内存（栈）中并再对剩下的图进行染色。把变量存在栈上，
+        就意味着它不需要使用任何寄存器资源，即我们可以将它从这张图中删除。这个过程被称为\textbf{溢出 (spill)}。
 \end{itemize}
 
-做完活跃分析之后，理论上我们可以通过判断两个变量是否同时活跃来知道哪些变量是存在 “冲突”
-的，即他们不能保存在同一个寄存器中。
+由于上面所述的图表示了冲突关系，因此被称作冲突图 (Interference Graph)。
 
-冲突图 (Interference Graph) 就是表示变量之间冲突关系的图，它是一个无向图，图中的每个节点表示一个变量，
-如果两个变量之间存在冲突，则它们之间有一条边。
+注意，判断一个图是否能被 K-染色是一个 NP 难问题，因此不存在一个多项式时间算法来给出染色方案。
+因此我们不能在多项式时间内找到最优算法，所以我们这里的染色算法是启发式的。
 
-但是寄存器的数量是有限的（以 K 个为例，下同），所以我们需要一个算法来对冲突图进行染色，
-即将图中的每个节点（变量）染上颜色（分配到寄存器中）。当然大多数情况下，这张图是不能用 K 种颜色染色的，
-则我们希望将尽量少的变量存到内存（栈）中然后再对剩下的图进行染色。把变量存在栈上，
-就意味着它不需要使用任何寄存器资源，即我们可以将它从这张图中删除。这个过程被称为\textbf{溢出 (spill)}。
+本部分中，我们将以《现代编译原理》\cite{TigerBook}中的算法为例，介绍其中一系列的处理阶段，
+然后展示寄存器分配的流程（章节 \ref{opt-graph-workflow}）。关于具体的代码实现，强烈建议参考原书，
+原书提供了详细的解释和伪代码实现。
 
-\subsection{建图 (Build)}
+\subsection{建图 (Build)} \label{opt-graph-build}
 
 我们需要先构建冲突图。最基础的冲突关系是两个变量同时活跃。
 
-之前我们维护的是基本块的活跃信息，现在我们需要推出所有指令的 \texttt{liveIn} 和 \texttt{liveOut}。
-在一个基本块中，指令一定是顺序的（只有一个前驱和一个后继），
-由于后面连边我们只用到 \texttt{liveOut}，所以这里就只求 \texttt{liveOut}。
-最后一个指令的 \texttt{liveOut} 就是 block 的 \texttt{liveOut}。
-然后前一个指令的 \texttt{liveOut} 是这一个基础上扣掉 def，加上 use。
+通过基本块的活跃信息，以及活跃分析的数据流方程（公式 \ref{live-analysis-data-flow-1},
+\ref{live-analysis-data-flow-2}, \ref{live-analysis-data-flow-3}），
+我们可以获得每条指令的入口活跃和出口活跃变量。
 
-对于冲突图的连边，我们顺序遍历块中指令，所有 def（代表一段生命周期的开始）向此时存活的其它变量连边，
-表示它的生命周期的左端点被其他存活的变量的生命周期覆盖到了。
-此时存活的变量包括这时刻的所有 def（同时开始活跃）和 \texttt{liveOut}（活跃到现在）。
+我们注意到，对于每一个 def，其与所有入口活跃的变量冲突。因此，我们只需要顺序遍历块中指令，
+对所有 def 向此时存活的其它变量连边，表示它的生命周期的开始与其他存活的变量的生命周期有重合。
 
-\subsection{简化 (Simplify)}
+\subsection{简化 (Simplify)} \label{opt-graph-simplify}
 
-注意到，判断一个图是否能被 K-染色是一个NP问题。对于一张图，假设我们现在想用 K 种颜色来染色，
-则对于图中所有度数小于 K 的节点，无论其余的点采取何种染色方案，它都可以找到至少一种颜色可以染。那么我们可以先不染这种点。
+我们观察到，对于一张图，假设我们现在想用 K 种颜色来染色，则对于图中所有度数小于 K 的节点，
+无论其余的点采取何种染色方案，它都可以找到至少一种颜色可以染。那么我们可以先不染这种点。
 也就是说，我们把这样的点以及其连着的边从冲突图上去掉，
 然后染好剩下的图，再逆向地按照删点顺序把这些点染上颜色，就能构造出一种染色方案。
-具体地，我们可以把这样的节点丢进一个栈 \texttt{selectStack} 代表我们选择了这些节点将要在染色阶段进行这一轮的染色。
+具体来说，我们可以把这样的节点丢进一个栈（我们用 \texttt{selectStack} 来表示这个栈），
+代表我们将要在染色时对这里面的节点进行这一轮的染色。在后面的内容中，我们将度数小于 K 的节点称为低度数节点，
+将度数不小于 K 的节点称为高度数节点。
 
 下面会提到，传送有关 (move related) 的节点具有合并的可能性，故而在这一步，我们不对其进行简化。
-一个节点是传送有关的当且仅当它是 \texttt{move} 指令的一个操作数（src 或 dest），否则它是传送无关的。简化过程只处理传送无关的节点。
+一个节点是传送有关的当且仅当它是 \texttt{move} 指令的一个操作数（src 或 dest），否则它是传送无关的。
+简化过程只处理传送无关的节点。
 
 而在简化过程中某一时刻，这张图可能只包含度数大于等于 K 的节点和传送有关的节点，这时我们的简化算法就无法继续进行了。
-这时我们需要选择一个节点进行溢出，但我们对这个节点的溢出做出乐观的估计，即我们希望这个节点在最后是可以被染色的。
+这时我们需要选择一个节点，但我们对这个节点的溢出做出乐观的估计，即我们希望这个节点在最后是可以被染色的。
 因此我们把这个被选中的节点删除并压入 \texttt{selectStack} 中，继续我们的简化处理。
 
-\subsection{合并 (Coalesce)}
+\subsection{合并 (Coalesce)} \label{opt-graph-coalesce}
 
-两个变量可以（在冲突图上）合并当且仅当它们之间无边并且它们由一个 \texttt{move} 指令相连（src 和 dest）。通过对冲突图的分析，我们很容易能减少冗余的传送指令。
-合并指的是两个节点合并成一个节点，其邻节点为这两个节点原来邻居节点的并。
-容易想到，合并这一过程，我们可以用并查集来进行维护。
-但要注意的是，并不是只要符合定义都可以直接合并，因为合并完之后图可能从可 K-着色的变为不可K-着色的（从而造成溢出，这样并不优）。
-具体地，合并时可以参考这两条规则：
+两个变量可以（在冲突图上）合并当且仅当它们之间无边并且它们由一个 \texttt{move} 指令相连（src 和 dest）。
+通过对冲突图的分析，我们很容易能减少冗余的传送指令。合并指的是两个节点合并成一个节点，
+其邻节点为这两个节点原来邻居节点的并集。容易想到，合并这一过程，我们可以用并查集来进行维护。
+但要注意的是，并不是只要符合定义都可以直接合并，因为合并完之后图可能从可 K-着色的变为不可 K-着色的，从而造成溢出，这样并不优。具体地，合并时可以参考这两条规则：
 \begin{itemize}
-    \item Briggs 规则：合并后产生的节点所拥有的高度数（大于等于K）邻节点个数小于 K。因为简化会将这个合并后的节点移走。
-    \item George 规则：a 和 b 可以合并的条件是：a 的每一个邻居 t，t 是低度数的或者 t 与 b 冲突。
-    因为一次简化后，a 的所有邻居都和 b 相邻。
+    \item Briggs 规则：合并后产生的节点所拥有的度数不小于 K 的邻节点个数小于 K。
+        这样的节点在简化后会将这个合并后的节点移走。
+    \item George 规则：a 和 b 可以合并的条件是：对 a 的每一个邻居 t，t 的度数小于 K 或者 t 与 b 冲突。
+        这保证了合并这两个节点不会让染色问题更难解决。
 \end{itemize}
 
 你可以在两条规则都满足的前提下才进行合并，当然你也可以只满足其中一条，或者加入一些对节点的特判，等等。
-但这两条规则都是安全的，即当通过任意一条规则合并成功时，这张图不会从可 K-着色的变成不可 K-着色的。
-当合并发生之后，新产生的节点将不再是传送有关的节点，因此我们可以将其放入待简化的工作表中,使得简化过程能进一步进行下去。
+这两条规则都是安全的，即当通过任意一条规则合并成功时，这张图不会从可 K-着色的变成不可 K-着色的。
+当合并发生之后，新产生的节点将不再是传送有关的节点，因此我们可以将其放入待简化的工作表中，使得简化过程能进一步进行下去。
 
-\subsection{冻结 (Freeze)}
+\subsection{冻结 (Freeze)} \label{opt-graph-freeze}
 
 前面提到合并有条件。在建图后维护所有工作表的时候，传送有关的节点因为有合并的希望暂时不放入待简化的工作表中。
-如果传送与合并都无法进行，我们选择一个低度数的传送有关的节点，冻结与其有关的所有传送，即放弃这些传送的合并，使得其在下一轮被简化。
+如果传送与合并都无法进行，我们选择一个低度数的传送有关的节点，冻结与其有关的所有传送，即放弃这些传送的合并，
+使得其在下一轮被简化。
 
-\subsection{选择溢出变量 (Select Spill)}
+\subsection{选择溢出变量 (Select Spill)} \label{opt-graph-select-spill}
 
+我们用 \texttt{spillWorklist} 表示被筛选出来的度数大于 K 的节点的集合。
 选择 \texttt{spillWorklist} 中的一个高度数节点进行溢出。
-至于如何选择这一节点，你有很多种估价方式, 比如选择度数最大的，或者选择活跃区间最长的，
+至于如何选择这一节点，你有很多种估价方式，比如选择度数最大的，或者选择活跃区间最长的，
 或者选择度数和活跃区间长度的乘积最大的，等等。
-\texttt{spillWorklist}是被筛选出来的度数大于 K 的节点的集合。
-溢出的节点，我们扔进另一个栈 \texttt{spilledStack} 中，等待分配栈空间给这些变量。
+溢出的节点，我们扔进另一个栈（用 \texttt{spilledStack} 表示）中，等待分配栈空间给这些变量。
 
 溢出的节点加入简化工作表等待被删除（虽然它并非低度数节点），等到染色时会区分可染色节点和溢出节点。
 
-\subsection{进行染色 (Assign Color)}
+\subsection{进行染色 (Assign Color)} \label{opt-graph-assign-color}
 
-对 \texttt{selectStack} （本轮需要染色的节点）里的点进行染色。
+对 \texttt{selectStack}（本轮需要染色的节点）里的点进行染色。
 我们从一个空的图开始，通过重复地将栈顶节点添加到图中来重建冲突图。
 根据简化阶段的性质，我们可以保证每次添加的节点都会有一种它能使用的颜色。
 如果颜色不够，把当前节点放到已溢出表 \texttt{spilledStack} 中。
 
-\subsection{相关代码重写 (Rewrite)}
+\subsection{相关代码重写 (Rewrite)} \label{opt-graph-rewrite}
 
 如果存在溢出，我们需要逐个为其分配存储单元（一般来说是分配栈上的空间）。
 然后给这些变量插入对应的 load 和 store。def 后插 store，use 前插 load。
 我们就把这一溢出的变量变成了许多新创建的小临时变量（生命周期短），
 因此我们需要对改变后的图重新调用一次整个过程。
-
-整一个图染色寄存器分配过程的代码框架如下：
-\begin{lstlisting}[language=java]
-    public static void graphColoring(){
-    LivenessAnalysis();    
-    build();
-    MakeWorklist();
-        while(true){
-           do {
-                if (!simplifyWorklist.isEmpty()) simplify();
-                else if (!movesWorklist.isEmpty()) coalesce();
-                else if (!freezeWorklist.isEmpty()) freeze();
-                else if (!spillWorklist.isEmpty()) selectSpill();
-                } while (!simplifyWorklist.isEmpty() ||
-                        !worklistMoves.isEmpty() ||
-                        !freezeWorklist.isEmpty() ||
-                        !spillWorklist.isEmpty());
-        }
-        assignColor();
-        if(spilledStack.empty) return;
-        rewrite();
-        graphColoring();
-    }
-\end{lstlisting}
-
-其中 \texttt{MakeWorklist()} 函数是初始化所有工作表。
 
 \subsection{预着色节点的处理}
 
@@ -604,3 +580,36 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
 
 因此我们可以默认这些节点的度数为无穷大，这样它们就不会被简化。这样一来我们在简化步骤中只要简化到只剩预着色节点、传送有关节点和高度数节点的图就可以了。
 这一般不会引起问题，因为这些预着色的变量通常有着很短的生命周期。
+
+\subsection{图染色流程} \label{opt-graph-workflow}
+
+\begin{remark}
+我们这里不会介绍具体的逻辑。如果需要了解具体的代码逻辑，请参考《现代编译原理》\cite{TigerBook}。
+\end{remark}
+
+图染色的流程如下：
+\begin{enumerate}
+  \item 进行活跃分析。
+
+  \item 建立冲突图（章节 \ref{opt-graph-build}）。
+
+  \item 初始化每个阶段待处理的变量列表。
+    \begin{itemize}
+      \item 简化阶段（章节 \ref{opt-graph-simplify}）：所有度数小于 K 且不包含 \texttt{move} 的节点。
+      \item 合并阶段（章节 \ref{opt-graph-coalesce}）：所有 \texttt{move} 的指令。
+      \item 冻结阶段（章节 \ref{opt-graph-freeze}）：所有度数小于 K 且与 \texttt{move} 相关的点。
+      \item 选择溢出变量过程（章节 \ref{opt-graph-select-spill}）：所有度数不小于 K 的节点。
+    \end{itemize}
+
+  \item 执行以下部分直到所有阶段都没有待处理的变量：（注意，每次执行时从上至下选取第一个列表非空的阶段处理）
+    \begin{enumerate}
+      \item 简化阶段（章节 \ref{opt-graph-simplify}）
+      \item 合并阶段（章节 \ref{opt-graph-coalesce}）
+      \item 冻结阶段（章节 \ref{opt-graph-freeze}）
+      \item 选择溢出变量过程（章节 \ref{opt-graph-select-spill}）
+    \end{enumerate}
+
+  \item 进行染色（章节 \ref{opt-graph-assign-color}）。
+
+  \item 如果存在溢出的变量，则重写相关代码（章节 \ref{opt-graph-rewrite}），注意重写完需要再次进行图染色。
+\end{enumerate}
