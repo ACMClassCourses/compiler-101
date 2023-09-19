@@ -314,7 +314,7 @@ if.end:                                           ; preds = %if.else, %if.then
 
 \subsubsection{确定支配边界}
 
-根据支配边界的定义，一个节点 X 是节点 Y 的支配边界，当且仅当 Y 在 X 的一个前驱节点的支配集中但 Y 不在 X 的支配集中。
+根据支配边界的定义，一个节点 X 是节点 Y 的支配边界，当且仅当 Y 在 X 的一个控制流前驱节点的支配集中但 Y 不在 X 的支配集中。
 因此，$n$ 是且仅是 $\bigcup_{m\in\mathit{preds}(n)}\left(\mathit{Dom}(m)-(\mathit{Dom}(n)-\{n\})\right)$
 中元素的支配边界。
 
