@@ -1119,7 +1119,7 @@ assembly 的部分（如果你使用的是
 
 下面的代码是一个基础的 RISC-V 汇编程序：（我们会对每个语法逐一进行解释）
 \begin{lstlisting}
-	.section	text
+	.text
 	.globl	print
 	.type	print,@function
 print:
@@ -1132,18 +1132,19 @@ print:
 .Lfunc_end0:
 	.size	print, .Lfunc_end0-print
 
-	.section data
+	.section .data
 	.globl	a
+	.p2align 2
 a:
 	.word	1
 
-	.section rodata
+	.section .rodata
 .L.str:
 	.asciz	"%s"
 	.size	.L.str, 3
 \end{lstlisting}
 \begin{itemize}
-  \item \texttt{.section <section\_name>} 表示从此处开始到下一个
+  \item \texttt{.section .<section\_name>} 或者 \texttt{.<section\_name} 表示从此处开始到下一个
     \texttt{.section} 之间内容所归属的部分。通常程序会有
     \texttt{.text}、\texttt{.bss}、\texttt{.data}、\texttt{.rodata}
     这几个部分。\texttt{.text} 一般用于存放指令；\texttt{.bss}
@@ -1152,15 +1153,20 @@ a:
     \texttt{.rodata} 段用于存放只读数据，如字符串字面量。
   \item \texttt{.globl <label>} 允许 label 在全局被访问（其他汇编文件可以使用全局的标签），
     通常用于函数及变量。
+  \item \texttt{.p2align <alignment>} 表示下一个数据的对齐方式，保证对齐到 2 的 alignment 次幂。
+    其一般放在一个 label 之前，通常用于全局变量的对齐，RISC-V 汇编中存在等价写法 \texttt{.align <alignment>}。
+    RISC-V CPU 在访问内存的时候，要求内存地址是对齐的。例如 \texttt{lw} 指令要求
+    内存地址是 4 的倍数，\texttt{lh} 指令要求内存地址是 2 的倍数。
+    一般来说，load/store 指令的对齐要求与数据大小一致。
   \item \texttt{.type <symbol\_name>, <type\_description>} 是可选的，用于表明符号的类型。
     通常会利用 \texttt{.type} 来提升代码可读性。
   \item \texttt{<label>:} 表示这是一个标签，表示一个内存地址，其类似于 LLVM IR
     中的标签，但更注重内存方面的性质。
   \item \texttt{.word <number>} 表示一个 word 大小的数据。
   \item \texttt{.zero <size>} 表示连续 size 个全为 0 的字节。
-  \item \texttt{.size <symbol\_name>, <size>} 表示对应的符号所占的字节数。
+  \item \texttt{.size <symbol\_name>, <size>} 表示对应的符号所占的字节数，通常用于增加代码的可读性。
   \item \texttt{.asciz} 表示一个 ASCII 字符串
-    （字符串最后会自动加上结束符 \texttt{\textbackslash0})。与之相对的是，\texttt{.ascii}，
+    （字符串最后会自动加上结束符 \texttt{\textbackslash0}）。与之相对的是，\texttt{.ascii}，
     这个指令不会自动在后面加上结束符 \texttt{\textbackslash0}。
   \item 除了刚才的特殊符号外，每行还可以是汇编指令。汇编指令分为指令和伪指令
     (pseudo-instructions)，后者通常可以转化为一条或多条（真）指令。
@@ -1168,7 +1174,12 @@ a:
     (x10) 的值赋值给另一个寄存器 (x11)，如果用真的指令，那么对应的指令可以是
     \texttt{addi x11, x10, 0}，但伪指令 \texttt{mv} 让我们可以使用
     \texttt{mv x11, x10} 来代替刚才的指令，这样的逻辑更为清晰。
-  \item 注释以分号 (\texttt{;}) 开头。
+    又比如 \texttt{call} 是一条伪指令。当汇编器处理时，会将 \texttt{call}
+    自动的转化为 \texttt{auipc} 和 \texttt{jalr}。而当汇编器链接时，
+    如果做了 relaxation 优化，那么当调用函数比较近在 \texttt{jal} 的范围内时，
+    \texttt{call} 会被转化为 \texttt{jal}，从而减少了一条指令。
+    而这种灵活性和优化机会是真的指令所不具备的。
+  \item 注释以 (\texttt{#}) 开头。
 \end{itemize}
 
 \subsection{RISC-V Calling Convention}\label{RV-calling-convention}
