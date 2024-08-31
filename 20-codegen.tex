@@ -1144,7 +1144,7 @@ a:
 	.size	.L.str, 3
 \end{lstlisting}
 \begin{itemize}
-  \item \texttt{.section .<section\_name>} 或者 \texttt{.<section\_name} 表示从此处开始到下一个
+  \item \texttt{.section .<section\_name>} 或者 \texttt{.<section\_name>} 表示从此处开始到下一个
     \texttt{.section} 之间内容所归属的部分。通常程序会有
     \texttt{.text}、\texttt{.bss}、\texttt{.data}、\texttt{.rodata}
     这几个部分。\texttt{.text} 一般用于存放指令；\texttt{.bss}
@@ -1170,12 +1170,12 @@ a:
     这个指令不会自动在后面加上结束符 \texttt{\textbackslash0}。
   \item 除了刚才的特殊符号外，每行还可以是汇编指令。汇编指令分为指令和伪指令
     (pseudo-instructions)，后者通常可以转化为一条或多条（真）指令。
-    伪指令的意义在于将一些经常出现的行为用更好的方式进行包装，比如如果我需要将一个寄存器
+    伪指令的意义在于将一些经常出现的行为用更好的方式进行包装，比如我们需要将一个寄存器
     (x10) 的值赋值给另一个寄存器 (x11)，如果用真的指令，那么对应的指令可以是
     \texttt{addi x11, x10, 0}，但伪指令 \texttt{mv} 让我们可以使用
     \texttt{mv x11, x10} 来代替刚才的指令，这样的逻辑更为清晰。
-    又比如 \texttt{call} 是一条伪指令。当汇编器处理时，会将 \texttt{call}
-    自动的转化为 \texttt{auipc} 和 \texttt{jalr}。而当汇编器链接时，
+    又比如 \texttt{call} 是一条伪指令。又比如说在汇编器处理时，会将 \texttt{call}
+    自动转化为 \texttt{auipc} 和 \texttt{jalr}。而当汇编器链接时，
     如果做了 relaxation 优化，那么当调用函数比较近在 \texttt{jal} 的范围内时，
     \texttt{call} 会被转化为 \texttt{jal}，从而减少了一条指令。
     而这种灵活性和优化机会是真的指令所不具备的。
@@ -1295,7 +1295,7 @@ entry:
 \begin{itemize}
   \item 首先在函数调用前，我们必须将函数参数准备好。对于这个例子，我们需要将
     \texttt{\%a1}—\texttt{\%a8} 分别存放在 \texttt{a0-7} 里面，并将 \texttt{\%a9}
-    和 \texttt{\%a10} 分别存放在 \texttt{sp}—\texttt{sp+3} 和 \texttt{sp+4}—\texttt{sp+8}
+    和 \texttt{\%a10} 分别存放在 \texttt{sp}—\texttt{sp+3} 和 \texttt{sp+4}—\texttt{sp+7}
     Bytes 中。注意：请务必保证这样存放数据不会覆盖或影响到函数的其他栈上数据，如果会覆盖或影响到其他的数据，
     请增大栈空间。
   \item 接着，我们调用函数。在这个例子中，我们可以使用 \texttt{call foo} 来调用
