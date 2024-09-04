@@ -305,7 +305,7 @@ if.end:                                           ; preds = %if.else, %if.then
     Y 是 X 的支配边界，当且仅当 X 是 Y 的一个前驱节点（在 CFG 中）P 的必经节点，并且 X 并不是 Y 的严格必经节点。请看上图之例。比如，B 是 E 的前驱节点，同时 B 是 B 的必经节点，并且 B 不是 E 的严格必经节点。因此，E 是 B 的支配边界。从直觉上去考察这件事，支配边界实质上在表征到达这个点后，数据流可能会发生和其他数据流合并的情况。
     \begin{figure}
         \centering
-        \includegraphics[width=0.5\linewidth]{image/CTG.jpg}
+        \includegraphics[width=0.5\linewidth]{CTG.jpg}
         \caption{控制流图}
         \label{fig:enter-label}
     \end{figure}

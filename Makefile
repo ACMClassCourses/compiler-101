@@ -7,7 +7,7 @@ TEX_FILES = \
 	appendix.tex
 CLASS_FILES = elegantbook.cls
 BIB_FILES = reference.bib
-IMAGES = image/g4.png image/godbolt.png figure/cover.jpg
+IMAGES = image/g4.png image/godbolt.png figure/cover.jpg image/CTG.jpg
 
 .PHONY: all
 all: main.pdf
