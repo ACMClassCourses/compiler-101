@@ -345,7 +345,17 @@ if.end:                                           ; preds = %if.else, %if.then
 
 基于上面的原理，通过遍历所有基本块，我们就可以确定所有基本块的支配边界了。
 
-\subsubsection{\texttt{phi} 指令放置算法}
+\subsubsection{求支配集的其他方法}
+
+以上的方法是通过迭代的方式求解支配集的。在控制流图节点数量较少的情况下，其时间复杂度是可以接受的。
+然而，在某些极端的情况下，这种方法的时间复杂度是 $O(n^2)$ 的，可能会导致性能问题。以下给出两个求支配集的更高效的方法：
+
+1. bitset 优化集合操作：注意到在迭代过程中，我们只需要对支配集进行交集、并集等操作，因此可以使用 bitset 位运算来加速这些操作。
+2. Lengauer-Tarjan 算法：该算法可以在接近线性的时间复杂度内求解支配集。
+
+以上两种做法，均在 OI-wiki \url{https://oi-wiki.org/graph/dominator-tree/} 中有详细介绍，感兴趣的读者可以参考。
+
+\subsection{\texttt{phi} 指令放置算法}
 
 \texttt{phi} 指令的放置分为两个步骤——预留 \texttt{phi} 指令和替换原来的变量使用。
 
