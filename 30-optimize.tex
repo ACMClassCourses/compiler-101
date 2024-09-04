@@ -89,12 +89,12 @@
 上面的式子被称为\textbf{活跃分析的数据流方程}。
 
 \begin{itemize}
-\item $\mathit{use}[n]$ 一定都属于 $\mathit{in}[n]$，因为这些 use 在当前块的所有入边都活跃。
 
-\item 对于 $\mathit{out}[n]$ 中的变量，如果它在这个块中没有被 def 过，则它一定在 $\mathit{in}[n]$ 中。
-这是因为如果此节点的一条出边是活跃的，则它一定通过这条出边指向了一个它的 use 且不经过任何 def。
-那么在这条路径前面再任意加一条当前块的入边，它仍然是一个指向该变量的 use 且不经过任何
-def（这个块中没有 def），那么这条入边肯定也是活跃的。
+\item 对于 $\mathit{out}[n]$ 中的变量，如果它在这个块中没有被 def 过，则它一定在 $\mathit{in}[n]$ 中。这一点是符合直觉的。因为，一个变量出口活跃，那么说明这个变量将会在之后的语句中被use。那么，这个值一定要在先前被def过，并且一路传递到了use处。是故，只有两种可能：要么在当前块被def，要么是从之前的块中传入的。
+
+\item $\mathit{use}[n]$ 一定都属于 $\mathit{in}[n]$，因为use的值不可能在语句自身处被定义，所以一定是从其他语句处传入的。
+
+\item 是故，综合上述两部分，我们可以得到$\mathit{in}[n]$ 的构成：当前块中使用的变量，即 $\mathit{use}[n]$；以及之后块中需要使用的变量，但是并未在该块中定义的变量，即 $\mathit{out}[n] - \mathit{def}[n]$。
 
 \item 如果一个变量在当前块的某个后继中是入口活跃的，则它在当前块中一定是出口活跃的。
 因为它在当前块的该后继的所有入边都活跃，则在当前块连着这个后继的那条边上，它一定是活跃的。
@@ -111,23 +111,36 @@ def（这个块中没有 def），那么这条入边肯定也是活跃的。
 前面假设了一个基本块只包含一条指令。现在我们从活跃分析的流方程出发，来推导包含多条指令的基本块的等效 use/def。
 
 包含多条指令的基本块可以视为由两个更小的基本块合并而成。
-因此，我们只考虑两个基本块的合并。设这两个基本块为 $p \to n$，
-$p$ 只有一个后继 $n$，$n$ 只有一个前驱 $p$。记合并后的基本块为 $pn$。
-于是我们有 $\mathit{out}[p] = \mathit{in}[n]$。进而有：
+因此，我们只考虑两个由两条语句组成的基本块。设这两条语句为 $p$, $n$，基本块为 $pn$。
+由基本块的性质。每个基本块只有一个入口。因此基本块的入口活跃变量等价于这个基本块中，第一条语句的入口活跃变量。
+进而有：
 \begin{align*}
   \mathit{in}[pn] &= \mathit{in}[p] = \mathit{use}[p] \cup (\mathit{out}[p] - \mathit{def}[p]) \\
+\end{align*}
+同时，由基本块的性质 $\mathit{out}[p] = \mathit{in}[n]$。这是显然的，因为基本块内，没有其他的控制流转换，所以前一条语句的出口活跃变量，一定是后一条语句的入口活跃变量。进而：
+\begin{align*}
   &= \mathit{use}[p] \cup (\mathit{in}[n] - \mathit{def}[p]) \\
+\end{align*}
+根据式(4.1)进行展开，可以得到：
+\begin{align*}
   &= \mathit{use}[p] \cup \left(\mathit{use}[n] \cup (\mathit{out}[n] - \mathit{def}[n]) - \mathit{def}[p]\right) \\
+\end{align*}
+由集合的性质，可以得到：
+\begin{align*}
   &= \mathit{use}[p] \cup (\mathit{use}[n] - \mathit{def}[p]) \cup (\mathit{out}[n] - \mathit{def}[n] - \mathit{def}[p]) \\
+\end{align*}
+由并集的结合律，我们可以给它加上一个美观的括号，更加贴近我们在式(4.1)中的形式。
+\begin{align*}
   &= \left(\mathit{use}[p] \cup (\mathit{use}[n] - \mathit{def}[p])\right) \cup \left(\mathit{out}[pn]
    - (\mathit{def}[n] \cup \mathit{def}[p])\right).
 \end{align*}
 
 所以我们可以把 $\mathit{use}[p] \cup (\mathit{use}[n] - \mathit{def}[p])$ 视为 $pn$ 的等效 use，
-把 $\mathit{def}[n] \cup \mathit{def}[p]$ 视为 $pn$ 的等效 def。
+把 $\mathit{def}[n] \cup \mathit{def}[p]$ 视为 $pn$ 的等效 def。从直觉上去考虑这件事情，这是很正确的。一个块的等效def当然等价于每一条语句def的并集喽！等效use，则应当是那些在块中使用的变量，却没有在该基本块中，在使用该变量之前的前驱语句中定义的变量。因为从宏观上去看，剩下的那些use变量，在块内自我消化掉了，不用再依靠其他的块来输入这个变量。
 
-以基本块为单位进行迭代法，可以提高算法的效率。因为如果不合并，那每次迭代过程中基本块内部的 in/out 都会再算一遍。
-另一方面，得到基本块的等效 in/out 后，我们很容易根据流方程得到内部每条指令的 in/out。
+因此，我们可以首先计算出每个基本块的等效use和等效def。然后，以函数出口的活跃变量集合为空集为初始迭代条件，将这些块压入一个队列中，依次处理队头的基本块。在处理过程中，我们先暂时假定出口活跃的变量是“正确的”，然后据此根据式(4.1)，计算该基本块的入口活跃变量。随后，根据式(4.2)，更新CTG中该基本块所有的前驱块的出口活跃变量，并将那些确实得到更新的基本块也加入队列中，重复上述操作，直至所有基本块的出口、入口变量皆不再更新。
+
+这样，我们就获得了每个基本块的出口活跃变量和入口活跃变量。在实际操作过程中，我们可以只利用出口活跃变量，对基本块中的语句进行倒序遍历。由于基本块只有一个出口，所以一个基本块的出口活跃变量，即为该基本块中最后一句语句的出口活跃变量，可以此为基本块之初始条件。此外，计算每一句语句的use和def是平凡的。是故，我们可以根据每一句语句的出口活跃变量，计算出其入口活跃变量。由基本块的性质，该语句的入口活跃变量，即为基本块中该语句的前驱的出口活跃变量。重复此类操作，我们就可以得到每一条语句处的出口、入口活跃变量。
 
 \section{Mem2Reg 优化}\label{mem2reg}
 
@@ -158,34 +171,29 @@ use 是指 \texttt{alloca} 产生的空间的 def 和 use）
 即静态来看每个变量只被赋值一次，也就是函数中只有一个对其赋值的指令。这里需要注意，即便符合 SSA 形式，
 如果多次执行赋值指令所在的块，这个变量也会被多次赋值。
 
-对于静态多次赋值，我们用变量的不同 “版本” 来控制。例如：
+在我们的LLVM程序中，可能会出些一些\texttt{alloca}指令。\texttt{alloca}出的指针\textbf{仅被赋值一次}。但是，\texttt{alloca}出的指针指向的内容，是可以被赋值多次的。在下文中，我们把这个\texttt{alloca}出的指针简称作\texttt{ptr}，\texttt{*ptr}表示其指向的内容。
+
+所以，\texttt{alloca}指令的存在，是为了降低我们的心智压力，使得\texttt{*ptr}，可以根据我们的需要不断修改，从而达到一般程序中变量的效果。但是，这样做的坏处也显而易见：我们需要不断地到栈空间去读取和修改，降低了程序的效率，因此，我们可以发扬人类的智慧，想办法确定在不同的语句中，\texttt{*ptr}到底是多少。
+
+平凡地，如果我们的程序是完全顺序执行的，那么我们不难想到，可以用一个map去维护不同的\textbf{alloca出的指针}的当前值。每产生一次\testtt{store}指令，就去更新对应的\texttt{*ptr}。遇到所有的\texttt{load}指令，我们可以直接删除。比如如下指令：
+
 \begin{lstlisting}[language=LLVM]
-    %x = add i32 1, 2
-    %x = add i32 %x, 3
-    %x = add i32 %x, 4
+    %ptr = alloca i32
+    %init = add i32, 114, 514
+    store i32 %init, ptr %ptr
+    %x = load i32, ptr %ptr
+    %y = add i32, 1, %x
 \end{lstlisting}
 
-转化为 SSA 形式后：
+我们可以简单地改写成：
+
 \begin{lstlisting}[language=LLVM]
-    %x.0 = add i32 1, 2
-    %x.1 = add i32 %x.0, 3
-    %x.2 = add i32 %x.1, 4
+    %init = add i32, 114, 514
+    %y = add i32, 1, %init
 \end{lstlisting}
 
-注意 \texttt{x.0}, \texttt{x.1} ,\texttt{x.2} 都是不同的变量。
+但是，棘手的地方在于，我们的程序并不是完全的顺序结构，我们会遇到分支结构和循环结构。在此等状况下，我们很有可能会遇到在不同的分支上，某个\texttt{*ptr}截然不同的情况。请看下面的例子：
 
-SSA 形式通过插入 \texttt{phi} 指令来处理控制流分支的问题。
-\texttt{phi} 指令用于合并不同控制流路径上的变量版本，以确保变量在不同路径上的使用是一致的。
-在 LLVM IR 中，\texttt{phi} 指令通常以这样的格式写出：
-\begin{lstlisting}[language=LLVM]
-    %x.0 = phi <type> [ <val1>, <block1> ], [ <val2>, <block2> ], [ <val3>, <block3> ]
-\end{lstlisting}
-
-这代表着，变量 \texttt{\%x.0} 将被赋值 \texttt{val1}（如果控制流通过了 \texttt{block1}
-所在的分支而来），或 \texttt{val2}（控制流通过了 \texttt{block2}
-所在的分支而来）或 \texttt{val3}（控制流通过了 \texttt{block3} 所在的分支而来）。
-
-从具体效果上看，可以看下面这个例子：
 \begin{lstlisting}[language=C]
 // 这是一段简单的 C 代码
 int main() {
@@ -193,14 +201,17 @@ int main() {
     int b;
     if(x + 1 > y) {
         b = -1;
+        //branch 1
     } else {
         b = 1;
+        //branch 2
     }
+    //merge
     return b;
 }
 \end{lstlisting}
 
-下面是它生成的 IR：
+显而易见，在branch1和branch2中的b的值是截然不同的。按照我们的老方法，非常朴素地，会得到这样的IR:
 
 \begin{lstlisting}[language=LLVM]
 ; 不带优化的 LLVM IR
@@ -231,7 +242,19 @@ if.end:                                           ; preds = %if.else, %if.then
   %2 = load i32, i32* %b, align 4
   ret i32 %2
 }
+\end{lstlisting}
 
+但是，这值得吗？这个程序，我们简单地分析下，就可以得到在branch1中b为-1，在branch2中b为1。我们应当有一些方法，去告知我们的程序：“当控制流是从branch1来到merge时，b应该是1；控制流从branch2来到merge时，b应当是-1。”
+
+这个时候，我们就可以使用\texttt{phi}指令来解决这个问题了。\texttt{phi}指令的一般形式如下：
+
+\begin{lstlisting}[language=LLVM]
+    %obj = phi <type> [ <val1>, <block1> ], [ <val2>, <block2> ], [ <val3>, <block3> ]
+\end{lstlisting}
+
+每一个中括号中包含一个value-block对。这条\texttt{phi}指令的含义是，当控制流从第i个block跳来时，obj的值应当是第i个value。运用上\texttt{phi}指令进行mem2reg优化，我们就可以得到这样的IR:
+
+\begin{lstlisting}[language=LLVM]
 ; 带 Mem2Reg 优化的 LLVM IR
 define i32 @main() {
 entry:
@@ -250,43 +273,49 @@ if.end:                                           ; preds = %if.else, %if.then
   ret i32 %b.0
 }
 \end{lstlisting}
-可以看到 Mem2Reg 优化过后，代码干净了很多。注意到最后一个基本块开头的 \texttt{phi} 指令。
-而如何正确地插入 \texttt{phi} 指令，我们需要通过支配关系来分析。
 
-\subsection{支配关系}
+经过这样的优化，我们成功地移除了\texttt{alloca}指令，并且没有对程序的效果产生影响。但是代码干净了许多，性能也提升了不少。那么，我们不得不开始思考一个问题，我们到底应该怎么做呢？
 
-为了确定支配关系，我们需要引入一些概念：
+很显然，mem2reg优化首先需要我们构建正确的控制流图。然后，我们需要考虑，应当给哪些变量，在哪里放置\texttt{phi}。最后，我们需要给每个\texttt{phi}指令添上正确的block-value对，并且移除\texttt{alloca}及与\texttt{alloca}相关的冗余指令。
+
+构建控制流图在活跃分析部分已经阐述，故于此不复赘述。现在，我们首先要解决的问题，就是应该给哪些变量，在哪里放置\texttt{phi}指令。因此，我们需要引入\textbf{必经节点}的概念。
+
+\subsection{支配关系的确定}
+
+首先，我们先引入一些必要的概念：
 
 \begin{description}
-    \item[支配 (Dominate)]
-    如果每一条从流图的入口节点到节点 $n$ 的路径都经过节点 $d$, 我们就说 $d$ 支配 $n$，记为 $d$ dom $n$。
-    请注意，在这个定义下每个节点都支配它自己。
+    \item[必经节点 (Dominate)]
+    如果每一条从流图的入口节点到节点 $n$ 的路径都经过节点 $d$, 我们就说 $d$ 是 $n$ 的必经节点，记为 $d$ dom $n$。
+    请注意，在这个定义下每个节点都是自己的必经节点。
 
-    \item[严格支配 (Strictly Dominate)]
-    $d$ 严格支配 $n$ 当且仅当 $d$ 支配 $n$ 且 $n\neq d$, 记作 $d$ sdom $n$。
+    \item[严格必经节点 (Strictly Dominate)]
+    $d$ 是 $n$ 的严格必经节点，当且仅当 $d$ 是 $n$ 的必经节点 且 $n\neq d$, 记作 $d$ sdom $n$。
 
     \item[支配集]
-    节点 $n$ 的支配集合是所有支配 $n$ 的节点的集合，记为 $\mathit{Dom}(n)$。
+    节点 $n$ 的支配集是所有 $n$ 的必经节点的集合，记为 $\mathit{Dom}(n)$。
 
-    \item[直接支配节点 (Immediate Dominator, IDom)]
-    在支配树中，对于节点 n 来说，从根节点到节点 n 所在路径上的节点（不包括）都严格支配节点 n，
-    我们把在该路径上距离 n 最近的支配 n 的节点称作节点 n 的直接支配节点。
+    \item[最近必经节点 (Immediate Dominator, IDom)]
+    在支配集中，我们把从流图入口到节点 $n$ 所经过的路径上，最后一个 $n$的严格必经节点，称为$n$的最近必经节点。
 
     \item[支配树 (Dominator Tree)]
-    通过节点之间的支配关系，我们就可以依此来建立一颗支配树。在支配树中，节点 a 到 b 连边当且仅当
-    a 是 b 的直接支配节点。
+    通过节点之间的必经节点关系，我们就可以依此来建立一颗支配树。在支配树中，节点 a 是 b 的父亲，当且仅当 a 是 b 的最近必经节点。
 
     \item[支配边界 (Dominance Frontier)]
-    Y 是 X 的支配边界，当且仅当 X 支配 Y 的一个前驱节点（在 CFG 中）
-    同时 X 并不严格支配 Y。
+    Y 是 X 的支配边界，当且仅当 X 是 Y 的一个前驱节点（在 CFG 中）P 的必经节点，并且 X 并不是 Y 的严格必经节点。请看上图之例。比如，B 是 E 的前驱节点，同时 B 是 B 的必经节点，并且 B 不是 E 的严格必经节点。因此，E 是 B 的支配边界。从直觉上去考察这件事，支配边界实质上在表征到达这个点后，数据流可能会发生和其他数据流合并的情况。
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{image/CTG.jpg}
+        \caption{控制流图}
+        \label{fig:enter-label}
+    \end{figure}
 \end{description}
 
 \subsubsection{确定支配集}
 
 首先我们有：$\mathit{Dom}(n) = \{n\} \bigcup \left(\bigcap_{m\in \mathit{preds}(n)} \mathit{Dom}(m)\right)$。
-即：一个节点的支配集等于其所有前驱节点支配集的交集再并上自身。
-这是显而易见的，因为若 a 支配 b 的所有前驱，这样一来所有从入口到 b 的
-任意一个前驱的路都经过 a，那么所有入口到 b 的路也都经过 a。
+即：一个节点的支配集等于其所有前驱节点（ctg）支配集的交集再并上自身。
+这是显而易见的。根据支配集的定义，即所有必经节点的集合。根据定义，每个节点一定是自己的必经节点。所有前驱节点支配集的交集，即在表征所有前驱节点中共有的那些必经节点。因此，这两部分的并集就是这个节点的所有必经节点集合，也就是这个节点的支配集了。
 
 我们可以通过对每个节点的迭代来计算支配集，即先假设所有节点的支配集都是节点全集，
 并保证入口块没有入度（绝大多数情况下，入口块一定都没有入度），然后不断迭代直到收敛。
@@ -297,13 +326,9 @@ if.end:                                           ; preds = %if.else, %if.then
 
 这样我们就获得了所有的 $\mathit{Dom}(n)$, 也就是获得了所有节点的支配关系。
 
-\subsubsection{确定直接支配节点 (IDom)}
+\subsubsection{确定最近必经节点 (IDom)}
 
-我们观察到支配集具有一个重要性质——节点 n 的支配集里任意两个不同的块中，一个块必然支配另一个。
-否则两个块互不支配，因此存在一个从入口经过一个块但不经过另一个到达 n 的路径，与支配定义矛盾。
-
-基于这个性质，我们发现支配集中的元素构成一条链，且直接支配节点的支配集元素比当前节点少
-1（实际上，如果按照这些元素的支配集元素个数排序，这些元素的支配集元素每个之间都差 1）。
+我们观察到支配集具有一个重要性质——节点 n 的支配集里任意两个不同的节点中，一个节点 A 必然是另一个节点 B 的必经节点。若非如此，就会存在只经过其中一个节点，就到达节点 n 的路径，这和支配集的性质相矛盾。因此，我们可以发现，每个节点支配集中的所有元素构成一条链，且直接支配节点的支配集元素比当前节点少1（实际上，如果按照这些元素的支配集元素个数排序，这些元素的支配集元素每个之间都差 1）。
 因此，要确定当前节点的直接支配节点，只需要找到支配集元素个数为当前节点的支配集元素个数减 1 的节点。
 注意，同样因为刚才的性质，这样的节点数量有且只有一个。
 
@@ -330,17 +355,94 @@ if.end:                                           ; preds = %if.else, %if.then
 直到没有新的支配边界或者对应块的支配边界已经预留了对应变量的 \texttt{phi} 指令。
 
 \texttt{phi} 指令放置完毕后，我们需要对变量的使用进行重命名，即维护好之前提到的变量的 “版本”。
-重命名的过程包括：为所有的 use 替换变量名、确定 \texttt{phi} 指令中不同块进入对应的值。
-一种可行的方式是为每个变量名开一个栈。具体的操作为
+重命名的过程包括：为所有的 use 替换变量名、确定 \texttt{phi} 指令中不同块进入对应的值。一种可行的方式是为每个变量名开一个栈。这一步骤，我们可以在支配树上完成。具体的操作为
 \begin{itemize}
-  \item 在每个基本块中，算法首先重命名入口顶部的 \texttt{phi} 指令所定义的值，
-    然后按序访问程序块中的各个指令。算法会用当前的形式名（栈顶）重写各个操作数，
-    并为操作的结果创建一个新的形式名（入栈），使得新名字成为当前的名字。
-  \item 在基本块中所有的操作都已经重写之后，
-    我们将使用当前的形式名重写程序块在 CFG 中各后继节点中的适当 \texttt{phi} 指令的参数。
+  \item 在每个基本块中，首先应当对入口顶部的 \texttt{phi} 指令进行处理。我们要为这些\texttt{phi} 指令指定一个合适的\texttt{obj}名。然后，我们需要把这个\texttt{obj}名，压入这条\texttt{phi} 指令对应的 \texttt{alloca} 指令对应变量的对应栈中。对于每一个\texttt{alloca}指令对应的变量，我们都应该创建一个栈。栈顶就是当前的变量值。
+  \item 在基本块中所有的操作都已经重写之后，我们将使用当前的形式名重写程序块在 CFG 中各后继节点中的适当 \texttt{phi} 指令的参数，即用当前对应栈的栈顶元素更新之。
   \item 最后，对当前基本块在支配树中的子节点进行递归处理，这是一个在支配树上 DFS 的过程。
-  \item 当算法从这些递归调用返回时，它会将当前形式变量名的集合恢复到访问当前块之前的状态（出栈）。
+  \item 当算法从一个基本块返回时，应当弹出所有的，在本基本块中压入的元素都应当被弹出。将所有的栈恢复原状。
 \end{itemize}
+
+请看下面的例子：
+
+\begin{lstlisting}[language=LLVM]
+define i32 @main() {
+entry:
+  %retval = alloca i32, align 4
+  %x = alloca i32, align 4
+  %y = alloca i32, align 4
+  %b = alloca i32, align 4
+  store i32 0, i32* %retval, align 4
+  store i32 2, i32* %x, align 4
+  store i32 3, i32* %y, align 4
+  %0 = load i32, i32* %x, align 4
+  %add = add nsw i32 %0, 1
+  %1 = load i32, i32* %y, align 4
+  %cmp = icmp sgt i32 %add, %1
+  br i1 %cmp, label %if.then, label %if.else
+
+if.then:                                          ; preds = %entry
+  store i32 -1, i32* %b, align 4
+  br label %if.end
+
+if.else:                                          ; preds = %entry
+  store i32 1, i32* %b, align 4
+  br label %if.end
+
+if.end:                                           ; preds = %if.else, %if.then
+  %2 = load i32, i32* %b, align 4
+  ret i32 %2
+}
+\end{lstlisting}
+
+这个程序的支配树非常简单，即entry为根节点，剩余三个块均为entry的子节点。
+经过\texttt{phi} 指令放置算法后， 我们的if.end块会变成这样：
+
+\begin{lstlisting}[language=LLVM]
+if.end:
+  %b = phi i32 [ , %if.then ], [ , %if.else ]
+  %2 = load i32, i32* %b, align 4
+  ret i32 %2
+\end{lstlisting}
+
+为了方便演示，我们令这三个子节点的访问顺序是if.then, if.end, in.else.在访问完if.then块后，if.end块会变成：
+
+\begin{lstlisting}[language=LLVM]
+if.end:
+  %b = phi i32 [ -1, %if.then ], [ , %if.else ]
+  %2 = load i32, i32* %b, align 4
+  ret i32 %2
+\end{lstlisting}
+
+在访问if.end块过程中，首先，重写\texttt{phi} 指令：
+
+\begin{lstlisting}[language=LLVM]
+; 不带优化的 LLVM IR
+if.end:
+  %phi = phi i32 [ -1, %if.then ], [ , %if.else ]
+  %2 = load i32, i32* %b, align 4
+  ret i32 %2
+\end{lstlisting}
+
+我们将\texttt{\%phi}这个名字压入\%b对应的栈中。 
+
+检查该基本块，我们发现存在一条对\%b的\texttt{load} 指令。由于SSA的特性，Load的结果，即\%2的值从此被固定下来了。此时，\%b对应的栈，栈顶元素是\text{\%phi}，我们可以另外在开一个map，存储\%2中的值是多少。经过改写，我们得到：
+
+\begin{lstlisting}[language=LLVM]
+if.end:
+  %phi = phi i32 [ -1, %if.then ], [ , %if.else ]
+  ret i32 %phi
+\end{lstlisting}
+
+然后，我们退出if.end块，同时将\%phi弹出。最后，我们访问if.else块，更新\texttt{phi}指令的值：
+
+\begin{lstlisting}[language=LLVM]
+if.end:
+  %phi = phi i32 [ -1, %if.then ], [1, %if.else ]
+  ret i32 %phi
+\end{lstlisting}
+
+大功告成！接下来要做的，就是诸如删除alloca指令之类的操作，这是很平凡的工作了。
 
 \subsection{静态单赋值形式 (SSA) 的消除} \label{SSA-eliminate-phi}
 
@@ -465,6 +567,15 @@ BB1 中插入拷贝，这样就不会有数据冲突了。
 值得一提的是，在上图中，BB2 和 BB1 之间的 edge 也是 critical edge（BB2 既然有
 \texttt{phi} 指令，它必定是有多个前驱的，否则这个 \texttt{phi} 指令可以直接被消除）。
 为了方便展示，图里并没有画出来，实际上也需要在此插上空块。
+
+同时，在汇编代码翻译的过程中，我们也需要注意数据冲突发生的可能性。比如说，我们可能在翻译过程中，产生这样的语句：
+\begin{lstlisting}
+	mv	a2, a0
+	mv	a1, a2
+ 	mv	a0, a1
+\end{lstlisting}
+
+经过如上精彩绝伦的操作，我们成功地把三个寄存器都赋成了原先a0的值，但这大抵不是我们所希望的。在这个过程中，我们可以引入一些临时变量，或者合理地安排各变量之间的顺序来解决这个问题。
 
 \section{寄存器分配：冲突图与图染色算法}
 
