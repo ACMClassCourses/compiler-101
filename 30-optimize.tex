@@ -175,7 +175,7 @@ use 是指 \texttt{alloca} 产生的空间的 def 和 use）
 
 所以，\texttt{alloca}指令的存在，是为了降低我们的心智压力，使得\texttt{*ptr}，可以根据我们的需要不断修改，从而达到一般程序中变量的效果。但是，这样做的坏处也显而易见：我们需要不断地到栈空间去读取和修改，降低了程序的效率，因此，我们可以发扬人类的智慧，想办法确定在不同的语句中，\texttt{*ptr}到底是多少。
 
-平凡地，如果我们的程序是完全顺序执行的，那么我们不难想到，可以用一个map去维护不同的\textbf{alloca出的指针}的当前值。每产生一次\testtt{store}指令，就去更新对应的\texttt{*ptr}。遇到所有的\texttt{load}指令，我们可以直接删除。比如如下指令：
+平凡地，如果我们的程序是完全顺序执行的，那么我们不难想到，可以用一个map去维护不同的\textbf{alloca出的指针}的当前值。每产生一次\texttt{store}指令，就去更新对应的\texttt{*ptr}。遇到所有的\texttt{load}指令，我们可以直接删除。比如如下指令：
 
 \begin{lstlisting}[language=LLVM]
     %ptr = alloca i32
